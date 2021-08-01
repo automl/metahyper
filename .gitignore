@@ -1,0 +1,26 @@
+# Python
+__pycache__
+poetry.lock
+
+# Jetbrains
+.idea/*
+
+# Experiments and data
+results/*
+data/*
+
+# Latex
+*.aux
+*.fdb_latexmk
+*.fls
+*.log
+*.synctex.gz
+*.dpth
+*.md5
+*.dep
+*.auxlock
+*.snm
+*.out
+*.nav
+*.toc
+
