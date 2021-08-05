@@ -1,3 +1,7 @@
+import socket
+import socketserver
+
+import dill
 import netifaces
 
 
@@ -14,11 +18,6 @@ def nic_name_to_host(nic_name):
             f"Available interfaces are: {' '.join(netifaces.interfaces())}"
         )
     return host
-
-
-import socketserver
-import dill
-import socket
 
 
 class Sampler:
@@ -82,4 +81,3 @@ if __name__ == "__main__":
         start_master_server()
     except OSError:
         start_worker_server()
-
