@@ -1,5 +1,8 @@
+import atexit
+import fcntl
 import socket
 import socketserver
+from pathlib import Path
 
 import dill
 import netifaces
@@ -76,8 +79,27 @@ def start_worker_server():
     print("Received: {}".format(received))
 
 
+class MasterLocker:
+    def __init__(self, lock_path):
+        atexit.register(self.__del__)
+        master_lock_file = Path(lock_path)
+        master_lock_file.touch(exist_ok=True)
+        self.master_lock_file = master_lock_file.open("a")  # Use "a" for security reasons
+
+    def __del__(self):
+        self.master_lock_file.close()
+
+    def acquire_lock(self):
+        try:
+            fcntl.lockf(self.master_lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return True
+        except BlockingIOError:
+            return False
+
+
 if __name__ == "__main__":
-    try:
+    master_locker = MasterLocker(".lock_master")
+    if master_locker.acquire_lock():
         start_master_server()
-    except OSError:
+    else:
         start_worker_server()
