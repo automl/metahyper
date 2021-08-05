@@ -62,7 +62,12 @@ def start_master_server():
     MasterServerHandler.sampler = Sampler(dict())  # TODO: explain necessity for the dirty
     socketserver.TCPServer.allow_reuse_address = True  # Do we really want this?
     with socketserver.TCPServer((HOST, PORT), MasterServerHandler) as server:
-        server.serve_forever()
+        server.timeout = 10
+        try:
+            while True:
+                server.handle_request()
+        finally:
+            server.shutdown()
 
 
 def start_worker_client():
