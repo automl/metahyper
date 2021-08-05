@@ -1,8 +1,10 @@
 import atexit
 import fcntl
+import multiprocessing
 import socket
 import socketserver
 from pathlib import Path
+from time import sleep
 
 import dill
 import netifaces
@@ -58,11 +60,12 @@ class MasterServerHandler(socketserver.BaseRequestHandler):
 def start_master_server():
     HOST, PORT = "localhost", 9999
     MasterServerHandler.sampler = Sampler(dict())  # TODO: explain necessity for the dirty
+    socketserver.TCPServer.allow_reuse_address = True  # Do we really want this?
     with socketserver.TCPServer((HOST, PORT), MasterServerHandler) as server:
         server.serve_forever()
 
 
-def start_worker_server():
+def start_worker_client():
     HOST, PORT = "localhost", 9999
     data = "a"
 
@@ -97,9 +100,24 @@ class MasterLocker:
             return False
 
 
-if __name__ == "__main__":
+def start_loop():
     master_locker = MasterLocker(".lock_master")
-    if master_locker.acquire_lock():
-        start_master_server()
-    else:
-        start_worker_server()
+    master_process = None
+    while True:
+        if master_process is None and master_locker.acquire_lock():
+            sleep(2)
+            master_process = multiprocessing.Process(
+                name="master_server", target=start_master_server, daemon=True
+            )
+            master_process.start()
+            print("started master")
+        elif master_process is not None and not master_process.is_alive():
+            print("TODO release lock?")
+        else:
+            start_worker_client()
+            print("started worker")
+        sleep(10)
+
+
+if __name__ == "__main__":
+    start_loop()
