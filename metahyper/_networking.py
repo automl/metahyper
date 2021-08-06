@@ -32,7 +32,7 @@ class _MasterLocker:
         atexit.register(self.__del__)
         master_lock_file = Path(lock_path)
         master_lock_file.touch(exist_ok=True)
-        self.master_lock_file = master_lock_file.open("a")  # Use "a" for security reasons
+        self.master_lock_file = master_lock_file.open("a")  # a for security
 
     def __del__(self):
         self.master_lock_file.close()
@@ -57,6 +57,7 @@ class _MasterServerHandler(socketserver.BaseRequestHandler):
     sampler = None
 
     def handle(self):
+        # TODO: proper handling
         data = dill.loads(self.request.recv(1024).strip())
         self.sampler.new_result(data)
         print("{} wrote:".format(self.client_address[0]))
@@ -80,14 +81,17 @@ def _make_request(host, port, data, receive_something=False):
             return received
 
 
-def _start_master_server(host, port, sampler, timeout=10):
+def _start_master_server(host, port, sampler, master_lock_file, timeout=10):
     _MasterServerHandler.sampler = sampler  # TODO: explain necessity for the dirty
     # https://stackoverflow.com/questions/22549044/why-is-port-not-immediately-released-after-the-socket-closes
     socketserver.TCPServer.allow_reuse_address = True  # Do we really want this?
     with socketserver.TCPServer((host, port), _MasterServerHandler) as server:
         server.timeout = timeout
+        with open(master_lock_file, "w") as master_lock_file_stream:
+            master_lock_file_stream.write(f"{host}:{port}\n")
         try:
             while True:
+                # TODO: worker bookkeeping
                 server.handle_request()
         finally:
             server.shutdown()
@@ -100,7 +104,8 @@ def service_loop(host, port, evaluation_fn, sampler, master_handling_timeout=10)
     logger = logging.getLogger(__name__)
     logger.setLevel(logging.INFO)
 
-    master_locker = _MasterLocker(".lock_master")
+    master_lock_file = "master.lock"
+    master_locker = _MasterLocker(master_lock_file)
     master_process = None
     evaluation_process = None
     while True:
@@ -114,7 +119,11 @@ def service_loop(host, port, evaluation_fn, sampler, master_handling_timeout=10)
                 name="master_server",
                 target=_start_master_server,
                 kwargs=dict(
-                    host=host, port=port, sampler=sampler, timeout=master_handling_timeout
+                    host=host,
+                    port=port,
+                    sampler=sampler,
+                    master_lock_file=master_lock_file,
+                    timeout=master_handling_timeout,
                 ),
                 daemon=True,
             )
