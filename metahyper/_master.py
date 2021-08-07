@@ -17,6 +17,7 @@ class _MasterServerHandler(socketserver.BaseRequestHandler):
     client.
     """
 
+    # TODO: handle Connected to master but did not receive an answer. Did the master die?
     # TODO: previous working dir functionality
     # TODO: read in results from disk
     # TODO: load results from disk when master is restartet

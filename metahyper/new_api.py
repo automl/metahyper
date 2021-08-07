@@ -55,6 +55,7 @@ def run(
     development_stage_id=None,
     task_id=None,
     network_interface=None,
+    worker_alive_notice_every_seconds=20,
 ):
     if network_interface is not None:
         master_host = _nic_name_to_host(network_interface)
@@ -82,6 +83,7 @@ def run(
 
     master_process = None
     evaluation_process = None
+    start_time = time.time()
     while True:
         master_process, master_locker = service_loop_master_activities(
             base_result_directory,
@@ -94,7 +96,12 @@ def run(
         )
         time.sleep(2)
 
-        service_loop_worker_activities(
-            evaluation_fn, evaluation_process, master_location_file
+        uptime = time.time() - start_time
+        evaluation_process = service_loop_worker_activities(
+            evaluation_fn,
+            evaluation_process,
+            master_location_file,
+            uptime,
+            worker_alive_notice_every_seconds,
         )
         time.sleep(2)

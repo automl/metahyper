@@ -18,23 +18,29 @@ def _make_request(host, port, data, receive_something=False):
             return received
 
 
+def _serialize_result(evaluation_fn, location, *eval_args, **eval_kwargs):
+    result = evaluation_fn(*eval_args, **eval_kwargs)
+    with location.open("wb") as location_stream:
+        dill.dump(result, location_stream)
+
+
+def _read_master_address(master_location_file):
+    master_host, master_port = master_location_file.read_text().split(":")
+    master_port = int(master_port)
+    logger.debug(f"Worker using master_host={master_host} and port={master_port}")
+    return master_host, master_port
+
+
 def service_loop_worker_activities(
-    evaluation_fn, evaluation_process, master_location_file
+    evaluation_fn,
+    evaluation_process,
+    master_location_file,
+    uptime,
+    worker_alive_notice_every_seconds,
 ):
-    def serialize_result(evaluation_fn, location, *eval_args, **eval_kwargs):
-        result = evaluation_fn(*eval_args, **eval_kwargs)
-        with location.open("wb") as location_stream:
-            dill.dump(result, location_stream)
-
-    def read_master_address(master_location_file):
-        master_host, master_port = master_location_file.read_text().split(":")
-        master_port = int(master_port)
-        logger.debug(f"Worker using master_host={master_host} and port={master_port}")
-        return master_host, master_port
-
     try:
         if evaluation_process is None or not evaluation_process.is_alive():
-            master_host, master_port = read_master_address(master_location_file)
+            master_host, master_port = _read_master_address(master_location_file)
 
             logger.info("Worker requesting new config")
             evaluation_spec = _make_request(
@@ -46,7 +52,7 @@ def service_loop_worker_activities(
             )
             evaluation_process = multiprocessing.Process(
                 name="evaluation_process",
-                target=serialize_result,
+                target=_serialize_result,
                 kwargs=dict(
                     evaluation_fn=evaluation_fn,
                     location=evaluation_spec["config_working_directory"] / "result.dill",
@@ -59,8 +65,8 @@ def service_loop_worker_activities(
                 daemon=True,
             )
             evaluation_process.start()
-        elif True:  # TODO condition
-            master_host, master_port = read_master_address(master_location_file)
+        elif uptime % worker_alive_notice_every_seconds < 1:
+            master_host, master_port = _read_master_address(master_location_file)
             logger.info("Letting master know I am still alive")
             _make_request(master_host, master_port, "am_alive", receive_something=False)
     except ConnectionRefusedError:
@@ -69,6 +75,5 @@ def service_loop_worker_activities(
         logging.info(
             "Connected to master but did not receive an answer. Did the master die?"
         )
-        # TODO: handle on new master
 
     return evaluation_process
