@@ -39,6 +39,9 @@ class _MasterLocker:
     def __del__(self):
         self.master_lock_file.close()
 
+    def release_lock(self):
+        fcntl.lockf(self.master_lock_file, fcntl.LOCK_UN)
+
     def acquire_lock(self):
         try:
             fcntl.lockf(self.master_lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -135,7 +138,9 @@ def _service_loop_master_activities(
     sampler,
 ):
     if master_process is not None and not master_process.is_alive():
-        pass  # TODO: release lock?
+        master_process = None
+        master_locker.release_lock()
+        logger.info("Master process died, releasing master lock.")
     elif master_process is None and master_locker.acquire_lock():
         time.sleep(2)
         logger.info("Starting master server")
