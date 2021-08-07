@@ -66,7 +66,7 @@ class _MasterServerHandler(socketserver.BaseRequestHandler):
     def handle(self):
         # TODO: verify master always having the up to date configs
         data = dill.loads(self.request.recv(1024).strip())
-        logger.info(f"{self.client_address[0]} wrote: {data}")
+        logger.info(f"{self.client_address[0]} wrote: {data}")  # TODO: port?
 
         if data == "am_alive":
             # TODO: worker bookkeeping
@@ -125,6 +125,84 @@ def _start_master_server(
             server.shutdown()
 
 
+def _service_loop_master_activities(
+    base_result_directory,
+    master_handling_timeout,
+    master_host,
+    master_location_file,
+    master_locker,
+    master_process,
+    sampler,
+):
+    if master_process is not None and not master_process.is_alive():
+        pass  # TODO: release lock?
+    elif master_process is None and master_locker.acquire_lock():
+        time.sleep(2)
+        logger.info("Starting master server")
+        master_process = multiprocessing.Process(
+            name="master_server",
+            target=_start_master_server,
+            kwargs=dict(
+                host=master_host,
+                sampler=sampler,
+                master_location_file=master_location_file,
+                base_result_directory=base_result_directory,
+                timeout=master_handling_timeout,
+            ),
+            daemon=True,
+        )
+        master_process.start()
+
+    return master_process, master_locker  # Return avoids master locker not working
+
+
+def _service_loop_worker_activities(
+    evaluation_fn, evaluation_process, master_location_file
+):
+    def serialize_result(evaluation_fn, location, *eval_args, **eval_kwargs):
+        result = evaluation_fn(*eval_args, **eval_kwargs)
+        with location.open("wb") as location_stream:
+            dill.dump(result, location_stream)
+
+    def read_master_address():
+        master_host, master_port = master_location_file.read_text().split(":")
+        master_port = int(master_port)
+        logger.debug(f"Worker using master_host={master_host} and port={master_port}")
+        return master_host, master_port
+
+    if evaluation_process is None or not evaluation_process.is_alive():
+        master_host, master_port = read_master_address()
+        # TODO: error handling in case master read from disk is dead / corrupted read
+
+        logger.info("Worker requesting new config")
+        evaluation_spec = _make_request(
+            master_host, master_port, "give_me_new_config", receive_something=True
+        )
+        logger.info(
+            f"Starting up new evaluation process with {pprint.pformat(evaluation_spec)}"
+        )
+
+        evaluation_process = multiprocessing.Process(
+            name="evaluation_process",
+            target=serialize_result,
+            kwargs=dict(
+                evaluation_fn=evaluation_fn,
+                location=evaluation_spec["config_working_directory"] / "result.dill",
+                config=evaluation_spec["config"],
+                config_working_directory=evaluation_spec["config_working_directory"],
+                previous_working_directory=evaluation_spec["previous_working_directory"],
+            ),
+            daemon=True,
+        )
+        evaluation_process.start()
+    elif True:  # TODO condition
+        master_host, master_port = read_master_address()
+        logger.info("Letting master know I am still alive")
+        _make_request(master_host, master_port, "am_alive", receive_something=False)
+
+    return evaluation_process
+
+
 def service_loop(
     evaluation_fn,
     sampler,
@@ -161,72 +239,20 @@ def service_loop(
     master_process = None
     evaluation_process = None
     while True:
-        # Master activities
-        if master_process is not None and not master_process.is_alive():
-            logger.info("TODO release lock?")
-        elif master_process is None and master_locker.acquire_lock():
-            time.sleep(2)
-            logger.info("Starting master server")
-            master_process = multiprocessing.Process(
-                name="master_server",
-                target=_start_master_server,
-                kwargs=dict(
-                    host=master_host,
-                    sampler=sampler,
-                    master_location_file=master_location_file,
-                    base_result_directory=base_result_directory,
-                    timeout=master_handling_timeout,
-                ),
-                daemon=True,
-            )
-            master_process.start()
-
+        master_process, master_locker = _service_loop_master_activities(
+            base_result_directory,
+            master_handling_timeout,
+            master_host,
+            master_location_file,
+            master_locker,
+            master_process,
+            sampler,
+        )
         time.sleep(2)
 
-        def serialize_result(evaluation_fn, location, *eval_args, **eval_kwargs):
-            result = evaluation_fn(*eval_args, **eval_kwargs)
-            with location.open("wb") as location_stream:
-                dill.dump(result, location_stream)
-
-        # Worker activities
-        def read_master_address():
-            master_host, master_port = master_location_file.read_text().split(":")
-            master_port = int(master_port)
-            logger.debug(f"Worker using master_host={master_host} and port={master_port}")
-            return master_host, master_port
-
-        if evaluation_process is None or not evaluation_process.is_alive():
-            master_host_, master_port = read_master_address()
-            # TODO: error handling in case master read from disk is dead / corrupted read
-
-            logger.info("Worker requesting new config")
-            evaluation_spec = _make_request(
-                master_host, master_port, "give_me_new_config", receive_something=True
-            )
-            logger.info(
-                f"Starting up new evaluation process with {pprint.pformat(evaluation_spec)}"
-            )
-
-            evaluation_process = multiprocessing.Process(
-                name="evaluation_process",
-                target=serialize_result,
-                kwargs=dict(
-                    evaluation_fn=evaluation_fn,
-                    location=evaluation_spec["config_working_directory"] / "result.dill",
-                    config=evaluation_spec["config"],
-                    config_working_directory=evaluation_spec["config_working_directory"],
-                    previous_working_directory=evaluation_spec[
-                        "previous_working_directory"
-                    ],
-                ),
-                daemon=True,
-            )
-            evaluation_process.start()
-        elif True:  # TODO condition
-            master_host_, master_port = read_master_address()
-            logger.info("Letting master know I am still alive")
-            _make_request(master_host_, master_port, "am_alive", receive_something=False)
-
+        _service_loop_worker_activities(
+            evaluation_fn, evaluation_process, master_location_file
+        )
         time.sleep(5)
 
 
