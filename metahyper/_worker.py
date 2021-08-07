@@ -14,7 +14,7 @@ def _make_request(host, port, data, receive_something=False):
         sock.sendall(dill.dumps(data))
 
         if receive_something:
-            received = dill.loads(sock.recv(1024))  # TODO: error handling
+            received = dill.loads(sock.recv(1024))
             return received
 
 
