@@ -2,6 +2,7 @@ import atexit
 import fcntl
 import logging
 import multiprocessing
+import pprint
 import socket
 import socketserver
 import time
@@ -55,6 +56,7 @@ class _MasterServerHandler(socketserver.BaseRequestHandler):
     client.
     """
 
+    # TODO: previous working dir functionality
     # TODO: read in results from disk
     # TODO: load results from disk when master is restartet
     # TODO: request symbols (enum)
@@ -94,18 +96,16 @@ def _make_request(host, port, data, receive_something=False):
         except ConnectionRefusedError:
             logger.warning("something bad happened")  # TODO: handle
         sock.sendall(dill.dumps(data))
-        logger.info("Worker sent:     {}".format(data))
 
         if receive_something:
             received = dill.loads(sock.recv(1024))  # TODO: error handling
-            logger.info("Worker received: {}".format(received))
             return received
 
 
 def _start_master_server(
-    host, port, sampler, master_lock_file, base_result_directory, timeout=10
+    host, sampler, master_location_file, base_result_directory, timeout=10
 ):
-    # TODO: add host port scan
+    port = 9999  # TODO: add host port scan
 
     # The handler gets instantiated on each request, so, to have persistent parts we use
     # class attributes.
@@ -116,7 +116,7 @@ def _start_master_server(
     socketserver.TCPServer.allow_reuse_address = True  # Do we really want this?
     with socketserver.TCPServer((host, port), _MasterServerHandler) as server:
         server.timeout = timeout
-        with master_lock_file.open("w") as master_lock_file_stream:
+        with master_location_file.open("w") as master_lock_file_stream:
             master_lock_file_stream.write(f"{host}:{port}\n")
         try:
             while True:
@@ -126,20 +126,19 @@ def _start_master_server(
 
 
 def service_loop(
-    host,
-    port,
     evaluation_fn,
     sampler,
     optimization_dir,
     master_handling_timeout=10,
     development_stage_id=None,
     task_id=None,
+    network_interface=None,
 ):
-    # TODO: network_interface api
-    # TODO: previous working dir functionality
-    # TODO proper logging handling
+    if network_interface is not None:
+        master_host = nic_name_to_host(network_interface)
+    else:
+        master_host = "localhost"
 
-    # TODO: add task / adj support
     optimization_dir = Path(optimization_dir)
     if development_stage_id is not None:
         optimization_dir = Path(optimization_dir) / f"dev_{development_stage_id}"
@@ -149,8 +148,13 @@ def service_loop(
     base_result_directory = optimization_dir / "results"
     base_result_directory.mkdir(parents=True, exist_ok=True)
 
-    master_lock_file = optimization_dir / ".networking" / "master.lock"
-    master_lock_file.parent.mkdir(exist_ok=True)
+    networking_dir = optimization_dir / ".networking"
+    networking_dir.mkdir(exist_ok=True)
+
+    master_location_file = networking_dir / "master.location"
+    master_location_file.touch(exist_ok=True)
+
+    master_lock_file = networking_dir / "master.lock"
     master_lock_file.touch(exist_ok=True)
     master_locker = _MasterLocker(master_lock_file)
 
@@ -167,10 +171,9 @@ def service_loop(
                 name="master_server",
                 target=_start_master_server,
                 kwargs=dict(
-                    host=host,
-                    port=port,
+                    host=master_host,
                     sampler=sampler,
-                    master_lock_file=master_lock_file,
+                    master_location_file=master_location_file,
                     base_result_directory=base_result_directory,
                     timeout=master_handling_timeout,
                 ),
@@ -181,24 +184,29 @@ def service_loop(
         time.sleep(2)
 
         def serialize_result(evaluation_fn, location, *eval_args, **eval_kwargs):
-            print("location", location)
-            print("args", eval_args)
-            print("kwargs", eval_kwargs)
             result = evaluation_fn(*eval_args, **eval_kwargs)
             with location.open("wb") as location_stream:
                 dill.dump(result, location_stream)
 
         # Worker activities
+        def read_master_address():
+            master_host, master_port = master_location_file.read_text().split(":")
+            master_port = int(master_port)
+            logger.debug(f"Worker using master_host={master_host} and port={master_port}")
+            return master_host, master_port
+
         if evaluation_process is None or not evaluation_process.is_alive():
-            # TODO: read out master location from disk
-            # TODO: error handling in case master read from disk is dead
-            logger.info("Requesting new config")
+            master_host_, master_port = read_master_address()
+            # TODO: error handling in case master read from disk is dead / corrupted read
+
+            logger.info("Worker requesting new config")
             evaluation_spec = _make_request(
-                host, port, "give_me_new_config", receive_something=True
+                master_host, master_port, "give_me_new_config", receive_something=True
+            )
+            logger.info(
+                f"Starting up new evaluation process with {pprint.pformat(evaluation_spec)}"
             )
 
-            # TODO: pretty print
-            logger.info(f"Starting up new evaluation process with {evaluation_spec}")
             evaluation_process = multiprocessing.Process(
                 name="evaluation_process",
                 target=serialize_result,
@@ -215,8 +223,9 @@ def service_loop(
             )
             evaluation_process.start()
         elif True:  # TODO condition
+            master_host_, master_port = read_master_address()
             logger.info("Letting master know I am still alive")
-            _make_request(host, port, "am_alive", receive_something=False)
+            _make_request(master_host_, master_port, "am_alive", receive_something=False)
 
         time.sleep(5)
 
@@ -240,12 +249,4 @@ if __name__ == "__main__":
         time.sleep(20)
         return "evald"
 
-    import shutil
-
-    try:
-        shutil.rmtree("test_opt_dir")
-    except:
-        pass
-    service_loop(
-        "localhost", 9999, evaluation_fn, Sampler(dict()), optimization_dir="test_opt_dir"
-    )
+    service_loop(evaluation_fn, Sampler(dict()), optimization_dir="test_opt_dir")
