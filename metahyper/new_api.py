@@ -94,7 +94,7 @@ def run(
             master_process,
             sampler,
         )
-        time.sleep(2)
+        time.sleep(5)
 
         uptime = time.time() - start_time
         evaluation_process = service_loop_worker_activities(
@@ -104,4 +104,3 @@ def run(
             uptime,
             worker_alive_notice_every_seconds,
         )
-        time.sleep(2)
