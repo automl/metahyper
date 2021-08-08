@@ -60,7 +60,7 @@ def run(
     is_worker=True,
 ):
     # TODO: allow alg. developer user to set logger name
-    # TODO: set max evals or something like that
+    # TODO!: set max evals or something like that
     # Result read-out script / provide master sided live log / tensorboard
     if network_interface is not None:
         master_host = _nic_name_to_host(network_interface)
@@ -68,6 +68,7 @@ def run(
         master_host = "localhost"
 
     optimization_dir = Path(optimization_dir)
+    # TODO: give master the dev / task dirs
     if development_stage_id is not None:
         optimization_dir = Path(optimization_dir) / f"dev_{development_stage_id}"
     if task_id is not None:

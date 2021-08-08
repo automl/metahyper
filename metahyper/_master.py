@@ -1,5 +1,6 @@
 import logging
 import multiprocessing
+import random
 import socketserver
 import time
 
@@ -17,28 +18,32 @@ class _MasterServerHandler(socketserver.BaseRequestHandler):
     client.
     """
 
-    # TODO: handle Connected to master but did not receive an answer. Did the master die?
-    # TODO: previous working dir functionality
-    # TODO: read in results from disk
-    # TODO: load results from disk when master is restartet
-    # TODO: request symbols (enum)
     sampler = None
     base_result_directory = None
 
     def handle(self):
-        # TODO: verify master always having the up to date configs
         data = dill.loads(self.request.recv(1024).strip())
         logger.info(f"{self.client_address[0]} wrote: {data}")  # TODO: port?
 
         if data == "am_alive":
-            # TODO: worker bookkeeping
+            # TODO!: worker bookkeeping, if worker died, check if it did write to disk
+            # TODO!: previous working dir functionality
+            # TODO!: worker: send config_id its worker on
+            # TODO!: flag config dir of dead worker as being dead
             pass
         elif data == "give_me_new_config":
-            self.sampler.new_result(data)
+            # TODO: handle Connected to master but did not receive an answer.
+            # TODO!: read in result from disk, give config_id here, maybe save with result
+            fake_config_id = random.randint(0, 1000)
+            self.sampler.new_result(data, fake_config_id)
             config, config_id = self.sampler.get_config_and_id()
             config_working_directory = self.base_result_directory / f"config_{config_id}"
             config_working_directory.mkdir()
-            # TODO: document that config_id is used for results path
+
+            # TODO: allow alg developer to allow json logging
+            config_file = config_working_directory / "config.dill"
+            with config_file.open("wb") as config_file_stream:
+                dill.dump(config, config_file_stream)
 
             request_answer = dict(
                 config_id=config_id,
@@ -51,15 +56,45 @@ class _MasterServerHandler(socketserver.BaseRequestHandler):
             raise ValueError(f"Invalid request from worker: {data}")
 
 
+def _load_previous_state(base_result_directory):
+    previous_results = dict()
+    pending_configs = dict()
+    for config_dir in base_result_directory.iterdir():
+        result_file = config_dir / "result.dill"
+        worker_dead_file = config_dir / "worker.dead"
+        config_file = config_dir / "config.dill"
+        config_id = config_dir.name[len("config_") :]
+
+        if result_file.exists():
+            with result_file.open("rb") as results_file_stream:
+                previous_results[config_id] = dill.load(results_file_stream)
+        elif worker_dead_file.exists():
+            pass  # TODO: handle master crashed before letting config restart
+        else:
+            # TODO: handle master crashed before config file created
+            with config_file.open("rb") as config_file_stream:
+                pending_configs[config_id] = dill.load(config_file_stream)
+
+    return previous_results, pending_configs
+
+
 def _start_master_server(
     host, sampler, master_location_file, base_result_directory, timeout=10
 ):
-    port = 9999  # TODO: add host port scan
+    port = 9999  # TODO!: add host port scan
 
     # The handler gets instantiated on each request, so, to have persistent parts we use
     # class attributes.
     _MasterServerHandler.sampler = sampler
     _MasterServerHandler.base_result_directory = base_result_directory
+
+    logger.info("Reading in previous results")
+    previous_results, pending_configs = _load_previous_state(base_result_directory)
+
+    logger.info(
+        f"Read in previous_results={previous_results}, pending_configs={pending_configs}"
+    )
+    sampler.load_results(previous_results, pending_configs)
 
     # https://stackoverflow.com/questions/22549044/why-is-port-not-immediately-released-after-the-socket-closes
     socketserver.TCPServer.allow_reuse_address = True  # Do we really want this?

@@ -5,10 +5,13 @@ import uuid
 class Sampler:
     def __init__(self, config_space):
         self.config_space = config_space
-        self.results = []
+        self.results = dict()
 
-    def new_result(self, result):
-        self.results.append(result)
+    def load_results(self, results, pending_configs):
+        self.results = {**self.results, **results}
+
+    def new_result(self, result, config_id):
+        self.results[0] = result
 
     def get_config_and_id(self):
         config_id = str(uuid.uuid4())[:6]

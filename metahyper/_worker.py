@@ -20,6 +20,7 @@ def _make_request(host, port, data, receive_something=False):
 
 
 def _serialize_result(evaluation_fn, location, *eval_args, **eval_kwargs):
+    # TODO: allow alg developer to allow json logging
     result = evaluation_fn(*eval_args, **eval_kwargs)
     with location.open("wb") as location_stream:
         dill.dump(result, location_stream)
