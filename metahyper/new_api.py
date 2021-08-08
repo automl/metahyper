@@ -56,8 +56,12 @@ def run(
     task_id=None,
     network_interface=None,
     worker_alive_notice_every_seconds=20,
+    can_be_master=True,
+    is_worker=True,
 ):
-    # TODO: control master / worker starting
+    # TODO: allow alg. developer user to set logger name
+    # TODO: set max evals or something like that
+    # Result read-out script / provide master sided live log / tensorboard
     if network_interface is not None:
         master_host = _nic_name_to_host(network_interface)
     else:
@@ -70,7 +74,7 @@ def run(
         optimization_dir = Path(optimization_dir) / f"task_{task_id}"
 
     base_result_directory = optimization_dir / "results"
-    base_result_directory.mkdir(parents=True, exist_ok=True)
+    base_result_directory.mkdir(parents=True, exist_ok=True)  # TODO: warn if dir exists
 
     networking_dir = optimization_dir / ".networking"
     networking_dir.mkdir(exist_ok=True)
@@ -86,21 +90,23 @@ def run(
     evaluation_process = None
     time_last_alive_notice = None
     while True:
-        master_process, master_locker = service_loop_master_activities(
-            base_result_directory,
-            master_handling_timeout,
-            master_host,
-            master_location_file,
-            master_locker,
-            master_process,
-            sampler,
-        )
-        time.sleep(5)
+        if can_be_master:
+            master_process, master_locker = service_loop_master_activities(
+                base_result_directory,
+                master_handling_timeout,
+                master_host,
+                master_location_file,
+                master_locker,
+                master_process,
+                sampler,
+            )
 
-        evaluation_process, time_last_alive_notice = service_loop_worker_activities(
-            evaluation_fn,
-            evaluation_process,
-            master_location_file,
-            time_last_alive_notice,
-            worker_alive_notice_every_seconds,
-        )
+        time.sleep(5)
+        if is_worker:
+            evaluation_process, time_last_alive_notice = service_loop_worker_activities(
+                evaluation_fn,
+                evaluation_process,
+                master_location_file,
+                time_last_alive_notice,
+                worker_alive_notice_every_seconds,
+            )
