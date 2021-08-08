@@ -2,6 +2,7 @@ import logging
 import multiprocessing
 import pprint
 import socket
+import time
 
 import dill
 
@@ -35,8 +36,8 @@ def service_loop_worker_activities(
     evaluation_fn,
     evaluation_process,
     master_location_file,
-    uptime,
-    worker_alive_notice_every_seconds,
+    time_last_alive_notice,
+    alive_notice_every_seconds,
 ):
     try:
         if evaluation_process is None or not evaluation_process.is_alive():
@@ -46,6 +47,7 @@ def service_loop_worker_activities(
             evaluation_spec = _make_request(
                 master_host, master_port, "give_me_new_config", receive_something=True
             )
+            time_last_alive_notice = time.time()
 
             logger.info(
                 f"Starting up new evaluation process with {pprint.pformat(evaluation_spec)}"
@@ -65,10 +67,11 @@ def service_loop_worker_activities(
                 daemon=True,
             )
             evaluation_process.start()
-        elif uptime % worker_alive_notice_every_seconds < 1:
+        elif (time.time() - time_last_alive_notice) - alive_notice_every_seconds > 0:
             master_host, master_port = _read_master_address(master_location_file)
             logger.info("Letting master know I am still alive")
             _make_request(master_host, master_port, "am_alive", receive_something=False)
+            time_last_alive_notice = time.time()
     except ConnectionRefusedError:
         logging.info("Could not connect to master server.")
     except EOFError:
@@ -76,4 +79,4 @@ def service_loop_worker_activities(
             "Connected to master but did not receive an answer. Did the master die?"
         )
 
-    return evaluation_process
+    return evaluation_process, time_last_alive_notice

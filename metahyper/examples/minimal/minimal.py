@@ -16,7 +16,7 @@ class Sampler:
 
 
 def evaluation_fn(config, config_working_directory, previous_working_directory):
-    time.sleep(100)
+    time.sleep(60)
     return "evald"
 
 

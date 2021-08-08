@@ -57,6 +57,7 @@ def run(
     network_interface=None,
     worker_alive_notice_every_seconds=20,
 ):
+    # TODO: control master / worker starting
     if network_interface is not None:
         master_host = _nic_name_to_host(network_interface)
     else:
@@ -83,7 +84,7 @@ def run(
 
     master_process = None
     evaluation_process = None
-    start_time = time.time()
+    time_last_alive_notice = None
     while True:
         master_process, master_locker = service_loop_master_activities(
             base_result_directory,
@@ -96,11 +97,10 @@ def run(
         )
         time.sleep(5)
 
-        uptime = time.time() - start_time
-        evaluation_process = service_loop_worker_activities(
+        evaluation_process, time_last_alive_notice = service_loop_worker_activities(
             evaluation_fn,
             evaluation_process,
             master_location_file,
-            uptime,
+            time_last_alive_notice,
             worker_alive_notice_every_seconds,
         )
