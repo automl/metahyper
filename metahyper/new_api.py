@@ -1,15 +1,16 @@
 import atexit
 import fcntl
 import logging
-import time
 from pathlib import Path
 
 import netifaces
 
 from metahyper._master import service_loop_master_activities
-from metahyper._worker import service_loop_worker_activities
+from metahyper._worker import service_loop_worker_activities, start_worker_server
 
 logger = logging.getLogger(__name__)
+
+# TODO: make sure errors get propagated to user properly
 
 
 def _nic_name_to_host(nic_name):
@@ -55,7 +56,6 @@ def run(
     development_stage_id=None,
     task_id=None,
     network_interface=None,
-    worker_alive_notice_every_seconds=20,
     can_be_master=True,
     is_worker=True,
 ):
@@ -63,9 +63,9 @@ def run(
     # TODO!: set max evals or something like that
     # Result read-out script / provide master sided live log / tensorboard
     if network_interface is not None:
-        master_host = _nic_name_to_host(network_interface)
+        machine_host = _nic_name_to_host(network_interface)
     else:
-        master_host = "localhost"
+        machine_host = "127.0.0.1"  # Localhost
 
     optimization_dir = Path(optimization_dir)
     # TODO: give master the dev / task dirs
@@ -87,27 +87,33 @@ def run(
     master_lock_file.touch(exist_ok=True)
     master_locker = _MasterLocker(master_lock_file)
 
+    worker_server = None
     master_process = None
     evaluation_process = None
-    time_last_alive_notice = None
-    while True:
-        if can_be_master:
-            master_process, master_locker = service_loop_master_activities(
-                base_result_directory,
-                master_handling_timeout,
-                master_host,
-                master_location_file,
-                master_locker,
-                master_process,
-                sampler,
-            )
-
-        time.sleep(5)
+    try:
         if is_worker:
-            evaluation_process, time_last_alive_notice = service_loop_worker_activities(
-                evaluation_fn,
-                evaluation_process,
-                master_location_file,
-                time_last_alive_notice,
-                worker_alive_notice_every_seconds,
-            )
+            worker_server = start_worker_server(machine_host)
+
+        while True:
+            if can_be_master:
+                master_process, master_locker = service_loop_master_activities(
+                    base_result_directory,
+                    master_handling_timeout,
+                    machine_host,
+                    master_location_file,
+                    master_locker,
+                    master_process,
+                    sampler,
+                    networking_dir,
+                )
+            if is_worker:
+                evaluation_process = service_loop_worker_activities(
+                    evaluation_fn,
+                    evaluation_process,
+                    master_location_file,
+                    worker_server,
+                )
+    finally:
+        if is_worker and worker_server is not None:
+            # TODO: check if this shutdown works nicely (keyboardinterrupt)
+            worker_server.shutdown()

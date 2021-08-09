@@ -11,7 +11,7 @@ class Sampler:
         self.results = {**self.results, **results}
 
     def new_result(self, result, config_id):
-        self.results[0] = result
+        self.results[config_id] = result
 
     def get_config_and_id(self):
         config_id = str(uuid.uuid4())[:6]
@@ -19,7 +19,7 @@ class Sampler:
 
 
 def evaluation_fn(config, config_working_directory, previous_working_directory):
-    time.sleep(60)
+    time.sleep(45)
     return "evald"
 
 
