@@ -4,7 +4,7 @@ import threading
 
 import Pyro4.naming
 
-from metahyper._networking import nic_name_to_host
+from metahyper.new_api import _nic_name_to_host
 
 
 class NameServer(object):
@@ -54,7 +54,7 @@ class NameServer(object):
             if self.nic_name is None:
                 self.host = "localhost"
             else:
-                self.host = nic_name_to_host(self.nic_name)
+                self.host = _nic_name_to_host(self.nic_name)
 
         _, self.pyro_ns, _ = Pyro4.naming.startNS(host=self.host, port=self.port)
 

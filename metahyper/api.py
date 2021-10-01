@@ -3,7 +3,7 @@ import logging.config
 import time
 from pathlib import Path
 
-import metahyper._networking
+import metahyper.new_api
 import metahyper.old_core.result as hpres
 from metahyper.old_core import nameserver as hpns
 from metahyper.old_core.master import Master
@@ -12,7 +12,7 @@ from metahyper.old_core.worker import Worker
 
 def _run_worker(nic_name, run_id, run_pipeline, working_directory, logger_name):
     time.sleep(5)  # Short artificial delay to make sure the nameserver is already running
-    host = metahyper._networking._nic_name_to_host(  # pylint: disable=protected-access
+    host = metahyper.new_api._nic_name_to_host(  # pylint: disable=protected-access
         nic_name
     )
     w = Worker(
