@@ -6,6 +6,7 @@ import socket
 import threading
 import time
 import traceback
+from copy import deepcopy
 
 import Pyro4
 import Pyro4.errors
@@ -26,6 +27,7 @@ class Worker:
     def __init__(
         self,
         run_pipeline,
+        config_space,
         run_id,
         nameserver=None,
         nameserver_port=None,
@@ -41,6 +43,7 @@ class Worker:
         run_id: anything with a __str__ method
             unique id_ to identify individual hp_transfer_optimizer run
         run_pipeline:
+        config_space:
         nameserver: str
             hostname or IP of the nameserver
         nameserver_port: int
@@ -87,6 +90,7 @@ class Worker:
         self.pyro_daemon = None  # Set in _run
 
         self._run_pipeline = run_pipeline
+        self._config_space = config_space
 
     def load_nameserver_credentials(self, working_directory, num_tries=60, interval=1):
         """
@@ -202,8 +206,10 @@ class Worker:
         config_working_directory,
         previous_working_directory,
     ):
+        _config = deepcopy(self._config_space)
+        _config.create_from_id(config)
         pipeline_result = self._run_pipeline(
-            config, config_working_directory, previous_working_directory
+            _config, config_working_directory, previous_working_directory
         )
         if isinstance(pipeline_result, dict):
             return pipeline_result
