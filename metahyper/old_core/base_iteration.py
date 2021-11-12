@@ -93,7 +93,7 @@ class BaseIteration(object):
             Some information about the configuration that will be stored in the results
         """
         if config is None:
-            config = self.config_sampler()
+            config = self.config_sampler().get_dictionary()
 
         if self.is_finished:
             raise RuntimeError(

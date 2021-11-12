@@ -3,6 +3,7 @@ import logging
 import os
 import threading
 import time
+from copy import deepcopy
 
 import numpy as np
 
@@ -283,6 +284,9 @@ class Master:
             if self.result_logger is not None:
                 self.result_logger(job)
             self.iterations[job.id[0]].register_result(job)
+            _config = deepcopy(self.config_space)
+            _config.create_from_id(job.kwargs["config"])
+            job.kwargs["config"] = _config
             self._sampler.new_result(job)
 
             if self.num_running_jobs <= self.job_queue_sizes[0]:
