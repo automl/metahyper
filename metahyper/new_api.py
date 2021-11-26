@@ -11,7 +11,7 @@ from metahyper._worker import service_loop_worker_activities, start_worker_serve
 
 logger = logging.getLogger(__name__)
 
-# TODO: make sure errors get propagated to user properly
+# TODO: make sure errors get propagated to user properly (evaluation fn)
 
 
 def run(
@@ -53,8 +53,11 @@ def run(
     master_lock_file.touch(exist_ok=True)
     master_locker = MasterLocker(master_lock_file)
 
-    if max_evaluations is not None:
-        check_max_evaluations(base_result_directory, max_evaluations, networking_dir)
+    if max_evaluations is not None and check_max_evaluations(
+        base_result_directory, max_evaluations, networking_dir
+    ):
+        logger.debug("Shutting down")
+        exit(0)
 
     worker_server = None
     master_process = None
@@ -64,10 +67,11 @@ def run(
             worker_server = start_worker_server(machine_host)
 
         while True:
-            if max_evaluations is not None:
-                check_max_evaluations(
-                    base_result_directory, max_evaluations, networking_dir
-                )
+            if max_evaluations is not None and check_max_evaluations(
+                base_result_directory, max_evaluations, networking_dir
+            ):
+                logger.debug("Shutting down")
+                exit(0)
 
             if can_be_master:
                 master_process, master_locker = service_loop_master_activities(

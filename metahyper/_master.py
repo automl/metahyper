@@ -13,9 +13,6 @@ from metahyper.status import load_state
 logger = logging.getLogger(__name__)
 
 
-# TODO: move
-
-
 def _try_to_read_worker_result(base_result_directory, worker_file):
     if worker_file.exists():  # Worker already finished an evaluation
         config_id = worker_file.read_text()
@@ -90,7 +87,11 @@ def _start_master_server(
     max_evaluations,
     timeout=10,
 ):
-    check_max_evaluations(base_result_directory, max_evaluations, networking_directory)
+    if check_max_evaluations(
+        base_result_directory, max_evaluations, networking_directory
+    ):
+        logger.debug("Shutting down")
+        exit(0)
 
     port = random.randint(8000, 9999)  # TODO: add host port scan
 
@@ -121,10 +122,11 @@ def _start_master_server(
         server.timeout = timeout  # TODO recheck
         master_location_file.write_text(f"{host}:{port}")
         while True:
-            if max_evaluations is not None:
-                check_max_evaluations(
-                    base_result_directory, max_evaluations, networking_directory
-                )
+            if max_evaluations is not None and check_max_evaluations(
+                base_result_directory, max_evaluations, networking_directory
+            ):
+                logger.debug("Shutting down")
+                exit(0)
 
             # TODO: do not check for aliveness every iteration
             # TODO: investigate connection reset error further (kill worker during req)

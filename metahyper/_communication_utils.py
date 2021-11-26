@@ -34,10 +34,10 @@ def check_max_evaluations(base_result_directory, max_evaluations, networking_dir
         if not shutdown_file.exists():
             logger.debug("Max evaluations is reached, creating shutdown file")
             shutdown_file.touch()
-        logger.debug("Shutting down")
-        exit(0)
+        return True
     elif shutdown_file.exists():
         shutdown_file.unlink()
+    return False
 
 
 def nic_name_to_host(nic_name):
