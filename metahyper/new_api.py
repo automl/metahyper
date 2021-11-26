@@ -23,6 +23,7 @@ def run(
     can_be_master=True,
     is_worker=True,
     max_evaluations=None,
+    timeout_seconds=30,
 ):
     # TODO: allow alg. developer user to set logger name
     # Result read-out script / provide master sided live log / tensorboard
@@ -89,6 +90,7 @@ def run(
                     evaluation_process,
                     master_location_file,
                     worker_server,
+                    timeout_seconds,
                 )
     finally:
         if is_worker and worker_server is not None:

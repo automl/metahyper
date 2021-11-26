@@ -1,13 +1,16 @@
 import logging
 import multiprocessing
-import random
 import socket
 import socketserver
 import time
 
 import dill
 
-from metahyper._communication_utils import check_max_evaluations, make_request
+from metahyper._communication_utils import (
+    check_max_evaluations,
+    make_request,
+    start_tcp_server,
+)
 from metahyper.status import load_state
 
 logger = logging.getLogger(__name__)
@@ -93,8 +96,6 @@ def _start_master_server(
         logger.debug("Shutting down")
         exit(0)
 
-    port = random.randint(8000, 9999)  # TODO: add host port scan
-
     # The handler gets instantiated on each request, so, to have persistent parts we use
     # class attributes.
     _MasterServerHandler.sampler = sampler
@@ -103,7 +104,6 @@ def _start_master_server(
 
     logger.debug("Reading in previous results")
     previous_results, pending_configs = load_state(base_result_directory)
-
     logger.debug(
         f"Read in previous_results={previous_results}, pending_configs={pending_configs}"
     )
@@ -115,11 +115,9 @@ def _start_master_server(
     )
     # TODO!: previous working dir functionality
 
-    # https://stackoverflow.com/questions/22549044/why-is-port-not-immediately-released-after-the-socket-closes
-    socketserver.TCPServer.allow_reuse_address = True  # Do we really want this?
-    # TODO: manual try finally to make sure lock file gets released asap
-    with socketserver.TCPServer((host, port), _MasterServerHandler) as server:
-        server.timeout = timeout  # TODO recheck
+    server = start_tcp_server(host, timeout, _MasterServerHandler)
+    try:
+        _, port = server.server_address
         master_location_file.write_text(f"{host}:{port}")
         while True:
             if max_evaluations is not None and check_max_evaluations(
@@ -174,6 +172,8 @@ def _start_master_server(
                     )
 
             server.handle_request()
+    finally:
+        server.server_close()
 
 
 def service_loop_master_activities(

@@ -1,12 +1,11 @@
 import logging
 import multiprocessing
 import pprint
-import random
 import socketserver
 
 import dill
 
-from metahyper._communication_utils import make_request
+from metahyper._communication_utils import make_request, start_tcp_server
 
 logger = logging.getLogger(__name__)
 
@@ -41,26 +40,15 @@ class _WorkerServerHandler(socketserver.BaseRequestHandler):
 
 
 def start_worker_server(machine_host, timeout=5):
-    # https://stackoverflow.com/questions/22549044/why-is-port-not-immediately-released-after-the-socket-closes
-    socketserver.TCPServer.allow_reuse_address = True  # Do we really want this?
-
-    worker_server = None
-    while worker_server is None:
-        worker_port = random.randint(10000, 13000)
-        try:
-            worker_server = socketserver.TCPServer(
-                (machine_host, worker_port), _WorkerServerHandler
-            )
-        except OSError:
-            logger.debug(
-                f"Socket {machine_host}:{worker_port} already used, trying another one"
-            )
-    worker_server.timeout = timeout
-    return worker_server
+    return start_tcp_server(machine_host, timeout, _WorkerServerHandler)
 
 
 def service_loop_worker_activities(
-    evaluation_fn, evaluation_process, master_location_file, worker_server
+    evaluation_fn,
+    evaluation_process,
+    master_location_file,
+    worker_server,
+    timeout_seconds,
 ):
     worker_server.handle_request()
 
@@ -89,9 +77,8 @@ def service_loop_worker_activities(
                 master_port,
                 request,
                 receive_something=True,
-                timeout_seconds=None,
+                timeout_seconds=timeout_seconds,
             )
-            # TODO: timeout param good value
 
             logger.info(
                 "Starting up new evaluation process with config "

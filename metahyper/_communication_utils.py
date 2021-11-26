@@ -1,7 +1,9 @@
 import atexit
 import fcntl
 import logging
+import random
 import socket
+import socketserver
 
 import dill
 import netifaces
@@ -73,3 +75,17 @@ class MasterLocker:
             return True
         except BlockingIOError:
             return False
+
+
+def start_tcp_server(machine_host, timeout, handler):
+    # https://stackoverflow.com/questions/22549044/why-is-port-not-immediately-released-after-the-socket-closes
+    socketserver.TCPServer.allow_reuse_address = True  # Do we really want this?
+    server = None
+    while server is None:
+        port = random.randint(10000, 13000)
+        try:
+            server = socketserver.TCPServer((machine_host, port), handler)
+        except OSError:
+            logger.debug(f"Socket {machine_host}:{port} already used, trying another one")
+    server.timeout = timeout  # TODO recheck
+    return server
