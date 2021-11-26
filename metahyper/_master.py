@@ -8,6 +8,7 @@ import time
 import dill
 
 from metahyper._networking_utils import make_request
+from metahyper.status import load_state
 
 logger = logging.getLogger(__name__)
 
@@ -75,28 +76,6 @@ class _MasterServerHandler(socketserver.BaseRequestHandler):
         self.request.sendall(dill.dumps(request_answer))
 
 
-def _load_previous_state(base_result_directory):
-    previous_results = dict()
-    pending_configs = dict()
-    for config_dir in base_result_directory.iterdir():
-        result_file = config_dir / "result.dill"
-        worker_dead_file = config_dir / "worker.dead"
-        config_file = config_dir / "config.dill"
-        config_id = config_dir.name[len("config_") :]
-
-        if result_file.exists():
-            with result_file.open("rb") as results_file_stream:
-                previous_results[config_id] = dill.load(results_file_stream)
-        elif worker_dead_file.exists():
-            pass  # TODO: handle master crashed before letting config restart
-        else:
-            # TODO: handle master crashed before config file created
-            with config_file.open("rb") as config_file_stream:
-                pending_configs[config_id] = dill.load(config_file_stream)
-
-    return previous_results, pending_configs
-
-
 def _start_master_server(
     host,
     sampler,
@@ -105,7 +84,7 @@ def _start_master_server(
     networking_directory,
     timeout=10,
 ):
-    port = random.randint(8000, 9999)  # TODO!: add host port scan
+    port = random.randint(8000, 9999)  # TODO: add host port scan
 
     # The handler gets instantiated on each request, so, to have persistent parts we use
     # class attributes.
@@ -114,7 +93,7 @@ def _start_master_server(
     _MasterServerHandler.networking_directory = networking_directory
 
     logger.info("Reading in previous results")
-    previous_results, pending_configs = _load_previous_state(base_result_directory)
+    previous_results, pending_configs = load_state(base_result_directory)
 
     logger.info(
         f"Read in previous_results={previous_results}, pending_configs={pending_configs}"
