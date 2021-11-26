@@ -15,15 +15,17 @@ logger = logging.getLogger(__name__)
 
 # TODO: move
 def check_max_evaluations(base_result_directory, max_evaluations, networking_directory):
-    logger.info("Checking if max evaluations is reached")
+    logger.debug("Checking if max evaluations is reached")
     previous_results, _ = load_state(base_result_directory)
-    max_evaluations_is_reached = len(previous_results) >= max_evaluations
+    max_evaluations_is_reached = (
+        max_evaluations is not None and len(previous_results) >= max_evaluations
+    )
     shutdown_file = networking_directory / "shutdown"
     if max_evaluations_is_reached:
         if not shutdown_file.exists():
-            logger.info("Max evaluations is reached, creating shutdown file")
+            logger.debug("Max evaluations is reached, creating shutdown file")
             shutdown_file.touch()
-        logger.info("Shutting down")
+        logger.debug("Shutting down")
         exit(0)
     elif shutdown_file.exists():
         shutdown_file.unlink()
@@ -58,7 +60,9 @@ class _MasterServerHandler(socketserver.BaseRequestHandler):
     def handle(self):
         data = dill.loads(self.request.recv(1024).strip())
         request_id, worker_host, worker_port = data
-        logger.info(f"{worker_host}:{worker_port} wrote: {request_id}")
+        logger.info(
+            f"Master received request {request_id} from worker {worker_host}:{worker_port}"
+        )
 
         # Check if result needs to be read
         worker_file = self.networking_directory / f"worker_{worker_host}:{worker_port}"
@@ -111,14 +115,18 @@ def _start_master_server(
     _MasterServerHandler.base_result_directory = base_result_directory
     _MasterServerHandler.networking_directory = networking_directory
 
-    logger.info("Reading in previous results")
+    logger.debug("Reading in previous results")
     previous_results, pending_configs = load_state(base_result_directory)
 
-    logger.info(
+    logger.debug(
         f"Read in previous_results={previous_results}, pending_configs={pending_configs}"
     )
-    sampler.load_results(previous_results, pending_configs)
 
+    sampler.load_results(previous_results, pending_configs)
+    logger.info(
+        f"Loaded {len(previous_results)} finished evaluations and "
+        f"{len(pending_configs)} pending evaluations"
+    )
     # TODO!: previous working dir functionality
 
     # https://stackoverflow.com/questions/22549044/why-is-port-not-immediately-released-after-the-socket-closes
@@ -138,7 +146,7 @@ def _start_master_server(
             for worker_file in networking_directory.glob("worker_*"):
                 worker_host, worker_port = worker_file.name[len("worker_") :].split(":")
                 worker_port = int(worker_port)
-                logger.info(f"Checking if worker {worker_host}:{worker_port} is alive")
+                logger.debug(f"Checking if worker {worker_host}:{worker_port} is alive")
 
                 try:
                     make_request(
@@ -149,7 +157,7 @@ def _start_master_server(
                         timeout_seconds=timeout,
                     )
                 except (ConnectionRefusedError, ConnectionResetError):
-                    logger.info("Worker not alive")
+                    logger.info(f"Worker {worker_host}:{worker_port} died")
                     worker_file = (
                         networking_directory / f"worker_{worker_host}:{worker_port}"
                     )
@@ -162,18 +170,18 @@ def _start_master_server(
                         )
                         dead_flag.touch()
                         worker_file.unlink()
-                        logger.info("Added dead flag and removed worker")
+                        logger.debug("Added dead flag and removed worker")
                     else:
                         sampler.new_result(worker_result, config_id)
-                        logger.info("Added result from dead worker.")
+                        logger.debug("Added result from dead worker.")
                 except EOFError:
                     # TODO: Handle
-                    logger.info(
+                    logger.debug(
                         "Connected to worker but did not receive an answer. Did the worker die?"
                     )
                 except socket.timeout:
                     # TODO: Handle
-                    logger.info(
+                    logger.debug(
                         "Connected to worker but its not answering request, perhaps it "
                         "awaits a new config."
                     )

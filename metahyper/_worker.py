@@ -36,7 +36,7 @@ class _WorkerServerHandler(socketserver.BaseRequestHandler):
 
     def handle(self):
         data = dill.loads(self.request.recv(1024).strip())
-        logger.info(f"Master wrote: {data}")
+        logger.debug(f"Master wrote: {data}")
         self.request.sendall(dill.dumps(dict()))
 
 
@@ -59,8 +59,9 @@ def service_loop_worker_activities(
     if evaluation_process is None or not evaluation_process.is_alive():
         try:
             master_host, master_port = _read_master_address(master_location_file)
+            worker_host, worker_port = worker_server.server_address
 
-            logger.info("Worker requesting new config")
+            logger.info(f"Worker {worker_host}:{worker_port} requesting new config")
             request = ["give_me_new_config"] + list(worker_server.server_address)
             evaluation_spec = make_request(
                 master_host, master_port, request, receive_something=True
@@ -68,7 +69,8 @@ def service_loop_worker_activities(
             # TODO: timeout param good value
 
             logger.info(
-                f"Starting up new evaluation process with {pprint.pformat(evaluation_spec)}"
+                "Starting up new evaluation process with config "
+                f"{pprint.pformat(evaluation_spec)}"
             )
             evaluation_process = multiprocessing.Process(
                 name="evaluation_process",
@@ -86,11 +88,11 @@ def service_loop_worker_activities(
             )
             evaluation_process.start()
         except ConnectionRefusedError:
-            logger.info("Could not connect to master server.")
+            logger.warning("Could not connect to master server.")
         except ConnectionResetError:
-            logger.info("Connection was reset from master")
+            logger.warning("Connection was reset from master")
         except EOFError:
-            logger.info(
+            logger.warning(
                 "Connected to master but did not receive an answer. Did the master die?"
             )
 
