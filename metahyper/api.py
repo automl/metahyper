@@ -3,6 +3,7 @@ import logging.config
 import time
 from pathlib import Path
 
+import metahyper._communication_utils
 import metahyper.new_api
 import metahyper.old_core.result as hpres
 from metahyper.old_core import nameserver as hpns
@@ -10,9 +11,11 @@ from metahyper.old_core.master import Master
 from metahyper.old_core.worker import Worker
 
 
-def _run_worker(nic_name, run_id, run_pipeline, config_space, working_directory, logger_name):
+def _run_worker(
+    nic_name, run_id, run_pipeline, config_space, working_directory, logger_name
+):
     time.sleep(5)  # Short artificial delay to make sure the nameserver is already running
-    host = metahyper.new_api._nic_name_to_host(  # pylint: disable=protected-access
+    host = metahyper._communication_utils.nic_name_to_host(  # pylint: disable=protected-access
         nic_name
     )
     w = Worker(
@@ -127,7 +130,9 @@ def run(
         logger.info(f"Run finished")
         return result
     elif start_worker:
-        _run_worker(nic_name, run_id, run_pipeline, config_space, working_directory, logger_name)
+        _run_worker(
+            nic_name, run_id, run_pipeline, config_space, working_directory, logger_name
+        )
         logger.info(f"Run finished")
     else:
         raise ValueError("Need to start either master or worker.")

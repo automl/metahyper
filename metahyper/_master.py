@@ -7,28 +7,13 @@ import time
 
 import dill
 
-from metahyper._networking_utils import make_request
+from metahyper._communication_utils import check_max_evaluations, make_request
 from metahyper.status import load_state
 
 logger = logging.getLogger(__name__)
 
 
 # TODO: move
-def check_max_evaluations(base_result_directory, max_evaluations, networking_directory):
-    logger.debug("Checking if max evaluations is reached")
-    previous_results, _ = load_state(base_result_directory)
-    max_evaluations_is_reached = (
-        max_evaluations is not None and len(previous_results) >= max_evaluations
-    )
-    shutdown_file = networking_directory / "shutdown"
-    if max_evaluations_is_reached:
-        if not shutdown_file.exists():
-            logger.debug("Max evaluations is reached, creating shutdown file")
-            shutdown_file.touch()
-        logger.debug("Shutting down")
-        exit(0)
-    elif shutdown_file.exists():
-        shutdown_file.unlink()
 
 
 def _try_to_read_worker_result(base_result_directory, worker_file):

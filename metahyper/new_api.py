@@ -1,51 +1,17 @@
-import atexit
-import fcntl
 import logging
 from pathlib import Path
 
-import netifaces
-
-from metahyper._master import check_max_evaluations, service_loop_master_activities
+from metahyper._communication_utils import (
+    MasterLocker,
+    check_max_evaluations,
+    nic_name_to_host,
+)
+from metahyper._master import service_loop_master_activities
 from metahyper._worker import service_loop_worker_activities, start_worker_server
 
 logger = logging.getLogger(__name__)
 
 # TODO: make sure errors get propagated to user properly
-
-
-def _nic_name_to_host(nic_name):
-    """ Helper function to translate the name of a network card into a valid host name"""
-    try:
-        # See https://pypi.org/project/netifaces/
-        host = netifaces.ifaddresses(nic_name).setdefault(
-            netifaces.AF_INET, [{"addr": "No IP addr"}]
-        )
-        host = host[0]["addr"]
-    except ValueError:
-        raise ValueError(
-            f"You must specify a valid interface name. "
-            f"Available interfaces are: {' '.join(netifaces.interfaces())}"
-        )
-    return host
-
-
-class _MasterLocker:
-    def __init__(self, lock_path):
-        atexit.register(self.__del__)
-        self.master_lock_file = lock_path.open("a")  # a for security
-
-    def __del__(self):
-        self.master_lock_file.close()
-
-    def release_lock(self):
-        fcntl.lockf(self.master_lock_file, fcntl.LOCK_UN)
-
-    def acquire_lock(self):
-        try:
-            fcntl.lockf(self.master_lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            return True
-        except BlockingIOError:
-            return False
 
 
 def run(
@@ -63,7 +29,7 @@ def run(
     # TODO: allow alg. developer user to set logger name
     # Result read-out script / provide master sided live log / tensorboard
     if network_interface is not None:
-        machine_host = _nic_name_to_host(network_interface)
+        machine_host = nic_name_to_host(network_interface)
     else:
         machine_host = "127.0.0.1"  # Localhost
 
@@ -75,7 +41,7 @@ def run(
         optimization_dir = Path(optimization_dir) / f"task_{task_id}"
 
     base_result_directory = optimization_dir / "results"
-    base_result_directory.mkdir(parents=True, exist_ok=True)  # TODO: warn if dir exists
+    base_result_directory.mkdir(parents=True, exist_ok=True)
 
     networking_dir = optimization_dir / ".networking"
     networking_dir.mkdir(exist_ok=True)
@@ -85,7 +51,7 @@ def run(
 
     master_lock_file = networking_dir / "master.lock"
     master_lock_file.touch(exist_ok=True)
-    master_locker = _MasterLocker(master_lock_file)
+    master_locker = MasterLocker(master_lock_file)
 
     if max_evaluations is not None:
         check_max_evaluations(base_result_directory, max_evaluations, networking_dir)

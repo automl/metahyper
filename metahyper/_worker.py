@@ -6,7 +6,7 @@ import socketserver
 
 import dill
 
-from metahyper._networking_utils import make_request
+from metahyper._communication_utils import make_request
 
 logger = logging.getLogger(__name__)
 
