@@ -44,10 +44,17 @@ def start_worker_server(machine_host, timeout=5):
     # https://stackoverflow.com/questions/22549044/why-is-port-not-immediately-released-after-the-socket-closes
     socketserver.TCPServer.allow_reuse_address = True  # Do we really want this?
 
-    worker_port = random.randint(8000, 9999)  # TODO: add host port scan
-    worker_server = socketserver.TCPServer(
-        (machine_host, worker_port), _WorkerServerHandler
-    )
+    worker_server = None
+    while worker_server is None:
+        worker_port = random.randint(10000, 13000)
+        try:
+            worker_server = socketserver.TCPServer(
+                (machine_host, worker_port), _WorkerServerHandler
+            )
+        except OSError:
+            logger.debug(
+                f"Socket {machine_host}:{worker_port} already used, trying another one"
+            )
     worker_server.timeout = timeout
     return worker_server
 
