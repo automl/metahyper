@@ -58,6 +58,7 @@ def run(
     network_interface=None,
     can_be_master=True,
     is_worker=True,
+    max_evaluations=None,
 ):
     # TODO: allow alg. developer user to set logger name
     # TODO!: set max evals or something like that
@@ -87,14 +88,24 @@ def run(
     master_lock_file.touch(exist_ok=True)
     master_locker = _MasterLocker(master_lock_file)
 
+    shutdown_file = networking_dir / "shutdown"
+
     worker_server = None
     master_process = None
     evaluation_process = None
     try:
+        if shutdown_file.exists():
+            logger.info("Shutting down due to shutdown signal")
+            exit(0)
+
         if is_worker:
             worker_server = start_worker_server(machine_host)
 
         while True:
+            if shutdown_file.exists():
+                logger.info("Shutting down due to shutdown signal")
+                exit(0)
+
             if can_be_master:
                 master_process, master_locker = service_loop_master_activities(
                     base_result_directory,
@@ -105,6 +116,7 @@ def run(
                     master_process,
                     sampler,
                     networking_dir,
+                    max_evaluations,
                 )
             if is_worker:
                 evaluation_process = service_loop_worker_activities(
@@ -115,5 +127,4 @@ def run(
                 )
     finally:
         if is_worker and worker_server is not None:
-            # TODO: check if this shutdown works nicely (keyboardinterrupt)
-            worker_server.shutdown()
+            worker_server.server_close()
