@@ -11,8 +11,6 @@ from metahyper._worker import service_loop_worker_activities, start_worker_serve
 
 logger = logging.getLogger(__name__)
 
-# TODO: make sure errors get propagated to user properly (evaluation fn)
-
 
 def run(
     evaluation_fn,

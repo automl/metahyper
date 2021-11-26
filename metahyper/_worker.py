@@ -56,6 +56,20 @@ def service_loop_worker_activities(
     evaluation_fn, evaluation_process, master_location_file, worker_server
 ):
     worker_server.handle_request()
+
+    evaluation_process_crashed = (
+        evaluation_process is not None
+        and not evaluation_process.is_alive()
+        and evaluation_process.exitcode != 0
+    )
+    if evaluation_process_crashed:
+        logger.error("Evaluation process crashed")
+        result_file = (
+            evaluation_process.evaluation_spec["config_working_directory"] / "result.dill"
+        )
+        with result_file.open("wb") as location_stream:
+            dill.dump("error", location_stream)
+
     if evaluation_process is None or not evaluation_process.is_alive():
         try:
             master_host, master_port = _read_master_address(master_location_file)
@@ -64,7 +78,11 @@ def service_loop_worker_activities(
             logger.info(f"Worker {worker_host}:{worker_port} requesting new config")
             request = ["give_me_new_config"] + list(worker_server.server_address)
             evaluation_spec = make_request(
-                master_host, master_port, request, receive_something=True
+                master_host,
+                master_port,
+                request,
+                receive_something=True,
+                timeout_seconds=None,
             )
             # TODO: timeout param good value
 
@@ -87,6 +105,7 @@ def service_loop_worker_activities(
                 daemon=True,
             )
             evaluation_process.start()
+            evaluation_process.evaluation_spec = evaluation_spec
         except ConnectionRefusedError:
             logger.warning("Could not connect to master server.")
         except ConnectionResetError:
