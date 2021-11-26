@@ -5,7 +5,7 @@ from pathlib import Path
 
 import netifaces
 
-from metahyper._master import service_loop_master_activities
+from metahyper._master import check_max_evaluations, service_loop_master_activities
 from metahyper._worker import service_loop_worker_activities, start_worker_server
 
 logger = logging.getLogger(__name__)
@@ -61,7 +61,6 @@ def run(
     max_evaluations=None,
 ):
     # TODO: allow alg. developer user to set logger name
-    # TODO!: set max evals or something like that
     # Result read-out script / provide master sided live log / tensorboard
     if network_interface is not None:
         machine_host = _nic_name_to_host(network_interface)
@@ -88,23 +87,21 @@ def run(
     master_lock_file.touch(exist_ok=True)
     master_locker = _MasterLocker(master_lock_file)
 
-    shutdown_file = networking_dir / "shutdown"
+    if max_evaluations is not None:
+        check_max_evaluations(base_result_directory, max_evaluations, networking_dir)
 
     worker_server = None
     master_process = None
     evaluation_process = None
     try:
-        if shutdown_file.exists():
-            logger.info("Shutting down due to shutdown signal")
-            exit(0)
-
         if is_worker:
             worker_server = start_worker_server(machine_host)
 
         while True:
-            if shutdown_file.exists():
-                logger.info("Shutting down due to shutdown signal")
-                exit(0)
+            if max_evaluations is not None:
+                check_max_evaluations(
+                    base_result_directory, max_evaluations, networking_dir
+                )
 
             if can_be_master:
                 master_process, master_locker = service_loop_master_activities(

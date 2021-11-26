@@ -13,6 +13,22 @@ from metahyper.status import load_state
 logger = logging.getLogger(__name__)
 
 
+# TODO: move
+def check_max_evaluations(base_result_directory, max_evaluations, networking_directory):
+    logger.info("Checking if max evaluations is reached")
+    previous_results, _ = load_state(base_result_directory)
+    max_evaluations_is_reached = len(previous_results) >= max_evaluations
+    shutdown_file = networking_directory / "shutdown"
+    if max_evaluations_is_reached:
+        if not shutdown_file.exists():
+            logger.info("Max evaluations is reached, creating shutdown file")
+            shutdown_file.touch()
+        logger.info("Shutting down")
+        exit(0)
+    elif shutdown_file.exists():
+        shutdown_file.unlink()
+
+
 def _try_to_read_worker_result(base_result_directory, worker_file):
     if worker_file.exists():  # Worker already finished an evaluation
         config_id = worker_file.read_text()
@@ -24,18 +40,6 @@ def _try_to_read_worker_result(base_result_directory, worker_file):
             return None, config_id
     else:
         return None, None
-
-
-def _check_max_evaluations(base_result_directory, max_evaluations, networking_directory):
-    logger.info("Checking if max evaluations is reached")
-    previous_results, _ = load_state(base_result_directory)
-    max_evaluations_is_reached = len(previous_results) >= max_evaluations
-    if max_evaluations_is_reached:
-        logger.info("Max evaluations is reached, creating shutdown file")
-        shutdown_file = networking_directory / "shutdown"
-        shutdown_file.touch()
-        logger.info("Shutting master server down")
-        exit(0)
 
 
 class _MasterServerHandler(socketserver.BaseRequestHandler):
@@ -97,7 +101,7 @@ def _start_master_server(
     max_evaluations,
     timeout=10,
 ):
-    _check_max_evaluations(base_result_directory, max_evaluations, networking_directory)
+    check_max_evaluations(base_result_directory, max_evaluations, networking_directory)
 
     port = random.randint(8000, 9999)  # TODO: add host port scan
 
@@ -125,7 +129,7 @@ def _start_master_server(
         master_location_file.write_text(f"{host}:{port}")
         while True:
             if max_evaluations is not None:
-                _check_max_evaluations(
+                check_max_evaluations(
                     base_result_directory, max_evaluations, networking_directory
                 )
 
