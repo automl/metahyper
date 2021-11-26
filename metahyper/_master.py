@@ -59,24 +59,36 @@ class _MasterServerHandler(socketserver.BaseRequestHandler):
             logger.info(f"Added result for config {config_id}")
 
         # TODO: handle Connected to master but did not receive an answer.
-        config, config_id = self.sampler.get_config_and_id()
+        config, config_id, previous_config_id = self.sampler.get_config_and_ids()
 
         # Worker Bookkeeping
+        # TODO: handle crashes for the next code blocks
         config_working_directory = self.base_result_directory / f"config_{config_id}"
         config_working_directory.mkdir()
+
+        if previous_config_id is not None:
+            previous_config_id_file = config_working_directory / "previous_config_id.txt"
+            previous_config_id_file.write_text(previous_config_id)
+            previous_working_directory = (
+                self.base_result_directory / f"config_{previous_config_id}"
+            )
+        else:
+            previous_working_directory = None
+
         config_file = config_working_directory / "config.dill"
         with config_file.open("wb") as config_file_stream:
             # TODO: allow alg developer to allow json logging
             dill.dump(config, config_file_stream)
+
         worker_file.touch(exist_ok=True)
-        worker_file.write_text(config_id)  # TODO: handle crash before this line
+        worker_file.write_text(config_id)
 
         # Request answering
         request_answer = dict(
             config_id=config_id,
             config=config,
             config_working_directory=config_working_directory,
-            previous_working_directory=None,
+            previous_working_directory=previous_working_directory,
         )
         self.request.sendall(dill.dumps(request_answer))
 
@@ -113,7 +125,6 @@ def _start_master_server(
         f"Loaded {len(previous_results)} finished evaluations and "
         f"{len(pending_configs)} pending evaluations"
     )
-    # TODO!: previous working dir functionality
 
     server = start_tcp_server(host, timeout, _MasterServerHandler)
     try:
@@ -155,6 +166,7 @@ def _start_master_server(
                         )
                         dead_flag.touch()
                         worker_file.unlink()
+                        # !!TODO: handle
                         logger.debug("Added dead flag and removed worker")
                     else:
                         sampler.new_result(worker_result, config_id)

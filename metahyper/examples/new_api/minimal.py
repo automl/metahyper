@@ -13,9 +13,11 @@ class Sampler:
     def new_result(self, result, config_id):
         self.results[config_id] = result
 
-    def get_config_and_id(self):
+    def get_config_and_ids(self):
+        config = dict(a=len(self.results))
         config_id = str(uuid.uuid4())[:6]
-        return dict(a=len(self.results)), config_id
+        previous_config_id = None
+        return config, config_id, previous_config_id
 
 
 def evaluation_fn(config, config_working_directory, previous_working_directory):
