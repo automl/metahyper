@@ -31,4 +31,8 @@ if __name__ == "__main__":
     import metahyper.new_api
 
     logging.basicConfig(level=logging.INFO)
-    metahyper.new_api.run(evaluation_fn, Sampler(dict()), optimization_dir="test_opt_dir")
+
+    config_space = None
+    sampler = Sampler(config_space)
+
+    metahyper.new_api.run(evaluation_fn, sampler, optimization_dir="test_opt_dir")
