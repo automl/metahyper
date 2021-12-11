@@ -1,6 +1,6 @@
 import ConfigSpace as CS
 
-from metahyper.examples.random_opt.random_search import run_random_search
+from metahyper_examples.random_opt.random_search import run_random_search
 
 
 def run_pipeline(  # pylint: disable=unused-argument

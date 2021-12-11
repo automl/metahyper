@@ -2,9 +2,13 @@
 name = "metahyper"
 version = "0.1.2"
 description = ""
-authors = ["metahyper"]
+authors = ["Danny Stoll"]
 readme = "README.md"
 license = "MIT"
+packages = [
+    { include = "metahyper" },
+    { include = "metahyper_examples" },
+]
 
 [tool.poetry.dependencies]
 python = ">=3.7.1,<3.10"
