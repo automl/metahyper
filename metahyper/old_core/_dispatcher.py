@@ -191,7 +191,9 @@ class Dispatcher:
             update = False
 
             with Pyro4.locateNS(host=self.nameserver, port=self.nameserver_port) as ns:
-                worker_names = ns.list(prefix=f"hp_transfer_optimizer.run_{self.run_id}.worker.")
+                worker_names = ns.list(
+                    prefix=f"hp_transfer_optimizer.run_{self.run_id}.worker."
+                )
                 self.logger.debug(
                     f"DISPATCHER: Found {len(worker_names):d} potential workers, "
                     f"{len(self.worker_pool):d} currently in the pool."

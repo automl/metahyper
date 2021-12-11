@@ -12,7 +12,7 @@ class SuccessiveHalving(BaseIteration):
     # pylint: disable=unused-argument
     def _advance_to_next_stage(self, config_ids, losses):
         """
-            SuccessiveHalving simply continues the best based on the current loss.
+        SuccessiveHalving simply continues the best based on the current loss.
         """
         ranks = np.argsort(np.argsort(losses))
         return ranks < self.num_configs[self.stage]

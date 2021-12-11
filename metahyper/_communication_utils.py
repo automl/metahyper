@@ -43,7 +43,7 @@ def check_max_evaluations(base_result_directory, max_evaluations, networking_dir
 
 
 def nic_name_to_host(nic_name):
-    """ Helper function to translate the name of a network card into a valid host name"""
+    """Helper function to translate the name of a network card into a valid host name"""
     try:
         # See https://pypi.org/project/netifaces/
         host = netifaces.ifaddresses(nic_name).setdefault(

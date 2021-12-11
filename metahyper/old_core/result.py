@@ -393,7 +393,7 @@ class Result:
         self.data = new_dict
 
     def num_iterations(self):
-        return max([k[0] for k in self.data.keys()]) + 1
+        return max(k[0] for k in self.data.keys()) + 1
 
     def get_fANOVA_data(
         self, config_space, budgets=None, loss_fn=lambda r: r.loss, failed_loss=None
