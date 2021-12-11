@@ -28,11 +28,11 @@ def evaluation_fn(config, config_working_directory, previous_working_directory):
 if __name__ == "__main__":
     import logging
 
-    import metahyper.new_api
+    import metahyper
 
     logging.basicConfig(level=logging.INFO)
 
     config_space = None
     sampler = Sampler(config_space)
 
-    metahyper.new_api.run(evaluation_fn, sampler, optimization_dir="test_opt_dir")
+    metahyper.run(evaluation_fn, sampler, optimization_dir="test_opt_dir")

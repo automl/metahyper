@@ -5,7 +5,7 @@ multi fidelity in the future.
 
 import numpy as np
 
-from metahyper.old_core.base_iteration import BaseIteration
+from metahyper import BaseIteration
 
 
 class SuccessiveHalving(BaseIteration):

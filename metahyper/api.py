@@ -1,138 +1,97 @@
 import logging
-import logging.config
-import time
 from pathlib import Path
 
-import metahyper._communication_utils
-import metahyper.new_api
-import metahyper.old_core.result as hpres
-from metahyper.old_core import nameserver as hpns
-from metahyper.old_core.master import Master
-from metahyper.old_core.worker import Worker
+from metahyper._communication_utils import (
+    MasterLocker,
+    check_max_evaluations,
+    nic_name_to_host,
+)
+from metahyper._master import service_loop_master_activities
+from metahyper._worker import service_loop_worker_activities, start_worker_server
 
-
-def _run_worker(
-    nic_name, run_id, run_pipeline, config_space, working_directory, logger_name
-):
-    time.sleep(5)  # Short artificial delay to make sure the nameserver is already running
-    host = metahyper._communication_utils.nic_name_to_host(  # pylint: disable=protected-access
-        nic_name
-    )
-    w = Worker(
-        run_pipeline,
-        config_space=config_space,
-        run_id=run_id,
-        host=host,
-        logger=logging.getLogger(f"{logger_name}.worker"),
-    )
-    w.load_nameserver_credentials(working_directory=str(working_directory))
-    w.run(background=False)
-
-
-def _run_master(
-    sampler,
-    nic_name,
-    run_id,
-    run_pipeline,
-    config_space,
-    working_directory,
-    n_iterations,
-    start_worker,
-    logger_name,
-    do_live_logging,
-    overwrite_logging,
-):
-    nameserver = hpns.NameServer(
-        run_id=run_id,
-        working_directory=str(working_directory),
-        nic_name=nic_name,
-    )
-    ns_host, ns_port = nameserver.start()
-    if start_worker:
-        w = Worker(
-            run_pipeline,
-            config_space=config_space,
-            run_id=run_id,
-            host=ns_host,
-            nameserver=ns_host,
-            nameserver_port=ns_port,
-            logger=logging.getLogger(f"{logger_name}.worker"),
-        )
-        w.run(background=True)
-
-    if do_live_logging:
-        result_logger = hpres.JSONResultLogger(
-            directory=working_directory, overwrite=overwrite_logging
-        )
-    else:
-        result_logger = None
-
-    optimizer = Master(
-        run_id=run_id,
-        sampler=sampler,
-        configs_space=config_space,
-        host=ns_host,
-        nameserver=ns_host,
-        nameserver_port=ns_port,
-        logger=logging.getLogger(f"{logger_name}.master"),
-        result_logger=result_logger,
-    )
-
-    try:
-        result = optimizer.run(n_iterations)
-    finally:
-        optimizer.shutdown(shutdown_workers=True)
-        nameserver.shutdown()
-
-    return result
+logger = logging.getLogger(__name__)
 
 
 def run(
+    evaluation_fn,
     sampler,
-    run_pipeline,
-    config_space,
-    working_directory,
-    n_iterations,
-    start_master=True,
-    start_worker=True,
-    nic_name="lo",
-    logger_name="meta_hyper",
-    do_live_logging=True,
-    overwrite_logging=False,
+    optimization_dir,
+    master_handling_timeout=10,
     development_stage_id=None,
     task_id=None,
+    network_interface=None,
+    can_be_master=True,
+    is_worker=True,
+    max_evaluations=None,
+    timeout_seconds=30,
 ):
-    if development_stage_id is not None:
-        working_directory = Path(working_directory) / f"dev_{development_stage_id}"
-    if task_id is not None:
-        working_directory = Path(working_directory) / f"task_{task_id}"
-
-    run_id = str(working_directory).replace("/", "_")
-
-    # TODO: log more arguments
-    logger = logging.getLogger(logger_name)
-    logger.info(f"Using working_directory={working_directory}")
-
-    if start_master:
-        result = _run_master(
-            sampler,
-            nic_name,
-            run_id,
-            run_pipeline,
-            config_space,
-            working_directory,
-            n_iterations,
-            start_worker,
-            logger_name,
-            do_live_logging,
-            overwrite_logging,
-        )
-        logger.info(f"Run finished")
-        return result
-    elif start_worker:
-        _run_worker(
-            nic_name, run_id, run_pipeline, config_space, working_directory, logger_name
-        )
-        logger.info(f"Run finished")
+    # TODO: allow alg. developer user to set logger name
+    # Result read-out script / provide master sided live log / tensorboard
+    if network_interface is not None:
+        machine_host = nic_name_to_host(network_interface)
     else:
-        raise ValueError("Need to start either master or worker.")
+        machine_host = "127.0.0.1"  # Localhost
+
+    optimization_dir = Path(optimization_dir)
+    # TODO: give master the dev / task dirs
+    if development_stage_id is not None:
+        optimization_dir = Path(optimization_dir) / f"dev_{development_stage_id}"
+    if task_id is not None:
+        optimization_dir = Path(optimization_dir) / f"task_{task_id}"
+
+    base_result_directory = optimization_dir / "results"
+    base_result_directory.mkdir(parents=True, exist_ok=True)
+
+    networking_dir = optimization_dir / ".networking"
+    networking_dir.mkdir(exist_ok=True)
+
+    master_location_file = networking_dir / "master.location"
+    master_location_file.touch(exist_ok=True)
+
+    master_lock_file = networking_dir / "master.lock"
+    master_lock_file.touch(exist_ok=True)
+    master_locker = MasterLocker(master_lock_file)
+
+    if max_evaluations is not None and check_max_evaluations(
+        base_result_directory, max_evaluations, networking_dir
+    ):
+        logger.debug("Shutting down")
+        exit(0)
+
+    worker_server = None
+    master_process = None
+    evaluation_process = None
+    try:
+        if is_worker:
+            worker_server = start_worker_server(machine_host)
+
+        while True:
+            if max_evaluations is not None and check_max_evaluations(
+                base_result_directory, max_evaluations, networking_dir
+            ):
+                logger.debug("Shutting down")
+                exit(0)
+
+            if can_be_master:
+                master_process, master_locker = service_loop_master_activities(
+                    base_result_directory,
+                    master_handling_timeout,
+                    machine_host,
+                    master_location_file,
+                    master_locker,
+                    master_process,
+                    sampler,
+                    networking_dir,
+                    max_evaluations,
+                )
+            if is_worker:
+                evaluation_process = service_loop_worker_activities(
+                    evaluation_fn,
+                    evaluation_process,
+                    master_location_file,
+                    worker_server,
+                    timeout_seconds,
+                )
+    finally:
+        if is_worker and worker_server is not None:
+            worker_server.server_close()
