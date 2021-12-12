@@ -4,7 +4,7 @@ import threading
 
 import Pyro4.naming
 
-from metahyper._communication_utils import nic_name_to_host
+from metahyper.old_metahyper.api import nic_name_to_host
 
 
 class NameServer:

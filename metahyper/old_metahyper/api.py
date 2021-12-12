@@ -3,20 +3,35 @@ import logging.config
 import time
 from pathlib import Path
 
-import metahyper as hpres
-import metahyper._communication_utils
-import metahyper.api
-from metahyper import Master, Worker
-from metahyper import nameserver as hpns
+import netifaces
+
+import metahyper.old_metahyper.result as hpres
+from metahyper.old_metahyper import nameserver as hpns
+from metahyper.old_metahyper.master import Master
+from metahyper.old_metahyper.worker import Worker
+
+
+def nic_name_to_host(nic_name):
+    """Helper function to translate the name of a network card into a valid host name"""
+    try:
+        # See https://pypi.org/project/netifaces/
+        host = netifaces.ifaddresses(nic_name).setdefault(
+            netifaces.AF_INET, [{"addr": "No IP addr"}]
+        )
+        host = host[0]["addr"]
+    except ValueError:
+        raise ValueError(
+            f"You must specify a valid interface name. "
+            f"Available interfaces are: {' '.join(netifaces.interfaces())}"
+        )
+    return host
 
 
 def _run_worker(
     nic_name, run_id, run_pipeline, config_space, working_directory, logger_name
 ):
     time.sleep(5)  # Short artificial delay to make sure the nameserver is already running
-    host = metahyper._communication_utils.nic_name_to_host(  # pylint: disable=protected-access
-        nic_name
-    )
+    host = nic_name_to_host(nic_name)  # pylint: disable=protected-access
     w = Worker(
         run_pipeline,
         config_space=config_space,

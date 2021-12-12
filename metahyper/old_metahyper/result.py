@@ -4,7 +4,7 @@ import os
 
 import pandas as pd
 
-from metahyper import Datum
+from metahyper.old_metahyper.base_iteration import Datum
 
 
 class Run:

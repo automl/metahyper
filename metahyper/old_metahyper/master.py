@@ -7,7 +7,9 @@ from copy import deepcopy
 
 import numpy as np
 
-from metahyper import Dispatcher, Result, SuccessiveHalving
+from metahyper.old_metahyper._dispatcher import Dispatcher
+from metahyper.old_metahyper.result import Result
+from metahyper.old_metahyper.successivehalving import SuccessiveHalving
 
 
 class Master:
