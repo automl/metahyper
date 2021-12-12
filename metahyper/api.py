@@ -12,7 +12,7 @@ logger = logging.getLogger("metahyper")
 
 def _check_max_evaluations(optimization_dir, max_evaluations):
     logger.debug("Checking if max evaluations is reached")
-    previous_results, *_ = load_state(optimization_dir)
+    previous_results, *_ = read(optimization_dir)
     max_evaluations_is_reached = (
         max_evaluations is not None and len(previous_results) >= max_evaluations
     )
@@ -23,7 +23,7 @@ def _check_max_evaluations(optimization_dir, max_evaluations):
 
 
 def _sample_config(optimization_dir, sampler):
-    previous_results, pending_configs, pending_configs_free = load_state(optimization_dir)
+    previous_results, pending_configs, pending_configs_free = read(optimization_dir)
     logger.info(
         f"Read in {len(previous_results)} previous results and "
         f"{len(pending_configs)} pending evaluations "
@@ -89,7 +89,7 @@ def _evaluate_config(
     logger.info(f"Finished evaluating config {config_id}")
 
 
-def load_state(optimization_dir):
+def read(optimization_dir):
     base_result_directory = Path(optimization_dir) / "results"
     logger.debug(f"Loading state from {base_result_directory}")
 
