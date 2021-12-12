@@ -34,5 +34,11 @@ if __name__ == "__main__":
 
     config_space = None
     sampler = Sampler(config_space)
+    optimization_dir = "test_opt_dir"
 
-    metahyper.run(evaluation_fn, sampler, optimization_dir="test_opt_dir")
+    metahyper.run(
+        evaluation_fn, sampler, optimization_dir=optimization_dir, max_evaluations=5
+    )
+    previous_results, pending_configs, pending_configs_free = metahyper.load_state(
+        optimization_dir
+    )
