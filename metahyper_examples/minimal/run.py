@@ -30,7 +30,7 @@ if __name__ == "__main__":
 
     import metahyper
 
-    logging.basicConfig(level=logging.DEBUG)
+    logging.basicConfig(level=logging.INFO)
 
     config_space = None
     sampler = Sampler(config_space)

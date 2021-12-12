@@ -5,10 +5,9 @@ from pathlib import Path
 import dill
 import more_itertools
 
-from metahyper._utils import Locker
-from metahyper.status import load_state
+from metahyper._utils import Locker, load_state
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("metahyper")
 
 
 def _check_max_evaluations(base_result_directory, max_evaluations):
@@ -18,23 +17,23 @@ def _check_max_evaluations(base_result_directory, max_evaluations):
         max_evaluations is not None and len(previous_results) >= max_evaluations
     )
     if max_evaluations_is_reached:
-        logger.debug("Max evaluations is reached, creating shutdown file")
+        logger.debug("Max evaluations is reached")
         return True
     return False
 
 
 def _sample_config(base_result_directory, sampler):
-    logger.debug("Reading in previous results")
     previous_results, pending_configs, pending_configs_free = load_state(
         base_result_directory
     )
-    logger.debug(
-        f"Read in previous_results={previous_results}, "
-        f"pending_configs={pending_configs}, "
-        f"pending_configs_free={pending_configs_free}, "
+    logger.info(
+        f"Read in {len(previous_results)} previous results and "
+        f"{len(pending_configs)} pending evaluations "
+        f"({len(pending_configs_free)} without a worker)"
     )
 
     if pending_configs_free:
+        logger.debug("Sampling a pending config without a worker")
         config_id, config = more_itertools.first(pending_configs_free.items())
         config_working_directory = base_result_directory / f"config_{config_id}"
         previous_config_id_file = config_working_directory / "previous_config.id"
@@ -43,11 +42,8 @@ def _sample_config(base_result_directory, sampler):
         else:
             previous_config_id = None
     else:
+        logger.debug("Sampling a new configuration")
         sampler.load_results(previous_results, pending_configs)
-        logger.info(
-            f"Loaded {len(previous_results)} finished evaluations and "
-            f"{len(pending_configs)} pending evaluations"
-        )
 
         config, config_id, previous_config_id = sampler.get_config_and_ids()
 
@@ -68,7 +64,29 @@ def _sample_config(base_result_directory, sampler):
     with Path(config_working_directory, "config.dill").open("wb") as config_stream:
         dill.dump(config, config_stream)
 
+    logger.info(f"Sampled config {config_id}")
     return config, config_working_directory, previous_working_directory
+
+
+def _evaluate_config(
+    config, config_working_directory, evaluation_fn, previous_working_directory
+):
+    config_id = config_working_directory.name[len("config_") :]
+    logger.info(f"Start evaluating config {config_id}")
+    try:
+        result = evaluation_fn(
+            config=config,
+            config_working_directory=config_working_directory,
+            previous_working_directory=previous_working_directory,
+        )
+    except Exception:
+        logger.error("An error occured during evaluation")
+        result = "error"
+
+    with Path(config_working_directory, "result.dill").open("wb") as result_open:
+        dill.dump(result, result_open)
+
+    logger.info(f"Finished evaluating config {config_id}")
 
 
 def run(
@@ -96,7 +114,7 @@ def run(
         if max_evaluations is not None and _check_max_evaluations(
             base_result_directory, max_evaluations
         ):
-            logger.debug("Shutting down")
+            logger.info("Maximum evaluation reached, shutting down")
             exit(0)
 
         if decision_locker.acquire_lock():
@@ -110,20 +128,12 @@ def run(
             config_lock_acquired = config_locker.acquire_lock()
             decision_locker.release_lock()
             if config_lock_acquired:
-                try:
-                    result = evaluation_fn(
-                        config=config,
-                        config_working_directory=config_working_directory,
-                        previous_working_directory=previous_working_directory,
-                    )
-                except Exception:
-                    logger.error("Evaluation process crashed")
-                    result = "error"
-                with Path(config_working_directory, "result.dill").open(
-                    "wb"
-                ) as result_open:
-                    dill.dump(result, result_open)
-                logger.info("Finished evaluating a config")
+                _evaluate_config(
+                    config,
+                    config_working_directory,
+                    evaluation_fn,
+                    previous_working_directory,
+                )
                 config_locker.release_lock()
         else:
             time.sleep(5)
