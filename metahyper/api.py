@@ -157,7 +157,7 @@ def run(
             optimization_dir, max_evaluations
         ):
             logger.info("Maximum evaluation reached, shutting down")
-            exit(0)
+            break
 
         if decision_locker.acquire_lock():
             config, config_working_directory, previous_working_directory = _sample_config(
