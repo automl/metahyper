@@ -1,3 +1,4 @@
+import collections
 import logging
 import time
 from pathlib import Path
@@ -89,6 +90,9 @@ def _evaluate_config(
     logger.info(f"Finished evaluating config {config_id}")
 
 
+ConfigResult = collections.namedtuple("ConfigResult", ["config", "result"])
+
+
 def read(optimization_dir):
     base_result_directory = Path(optimization_dir) / "results"
     logger.debug(f"Loading state from {base_result_directory}")
@@ -102,7 +106,11 @@ def read(optimization_dir):
         config_file = config_dir / "config.dill"
         if result_file.exists():
             with result_file.open("rb") as results_file_stream:
-                previous_results[config_id] = dill.load(results_file_stream)
+                result = dill.load(results_file_stream)
+            with config_file.open("rb") as config_file_stream:
+                config = dill.load(config_file_stream)
+            previous_results[config_id] = ConfigResult(config, result)
+
         elif config_file.exists():
             with config_file.open("rb") as config_file_stream:
                 pending_configs[config_id] = dill.load(config_file_stream)
