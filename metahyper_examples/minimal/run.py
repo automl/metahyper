@@ -20,8 +20,8 @@ class Sampler:
         return config, config_id, previous_config_id
 
 
-def evaluation_fn(config, config_working_directory, previous_working_directory):
-    time.sleep(45)
+def evaluation_fn(config_working_directory, previous_working_directory, **config):
+    time.sleep(25)
     return "evald"
 
 

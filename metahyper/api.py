@@ -76,9 +76,9 @@ def _evaluate_config(
     logger.info(f"Start evaluating config {config_id}")
     try:
         result = evaluation_fn(
-            config=config,
             config_working_directory=config_working_directory,
             previous_working_directory=previous_working_directory,
+            **config,
         )
     except Exception:
         logger.error("An error occured during evaluation")
