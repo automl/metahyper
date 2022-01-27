@@ -89,9 +89,11 @@ def _evaluate_config(
     except Exception:
         logger.exception(f"An error occured during evaluation of config {config}:")
         result = "error"
-    finally:
-        with Path(working_directory, "result.dill").open("wb") as result_open:
-            dill.dump(result, result_open)
+    except KeyboardInterrupt as e:
+        raise e
+
+    with Path(working_directory, "result.dill").open("wb") as result_open:
+        dill.dump(result, result_open)
 
     logger.info(f"Finished evaluating config {config_id}")
 
