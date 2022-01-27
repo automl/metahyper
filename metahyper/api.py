@@ -1,4 +1,5 @@
 import collections
+import inspect
 import logging
 import time
 from pathlib import Path
@@ -70,22 +71,27 @@ def _sample_config(optimization_dir, sampler):
 
 
 def _evaluate_config(
-    config, config_working_directory, evaluation_fn, previous_working_directory
+    config, working_directory, evaluation_fn, previous_working_directory
 ):
-    config_id = config_working_directory.name[len("config_") :]
+    config_id = working_directory.name[len("config_") :]
     logger.info(f"Start evaluating config {config_id}")
     try:
+        evaluation_fn_params = inspect.signature(evaluation_fn).parameters
+        directory_params = dict()
+        if "working_directory" in evaluation_fn_params:
+            directory_params["working_directory"] = working_directory
+        if "previous_working_directory" in evaluation_fn_params:
+            directory_params["previous_working_directory"] = previous_working_directory
         result = evaluation_fn(
-            config_working_directory=config_working_directory,
-            previous_working_directory=previous_working_directory,
+            **directory_params,
             **config,
         )
     except Exception:
-        logger.error("An error occured during evaluation")
+        logger.exception(f"An error occured during evaluation of config {config}:")
         result = "error"
-
-    with Path(config_working_directory, "result.dill").open("wb") as result_open:
-        dill.dump(result, result_open)
+    finally:
+        with Path(working_directory, "result.dill").open("wb") as result_open:
+            dill.dump(result, result_open)
 
     logger.info(f"Finished evaluating config {config_id}")
 
@@ -160,21 +166,18 @@ def run(
             break
 
         if decision_locker.acquire_lock():
-            config, config_working_directory, previous_working_directory = _sample_config(
+            config, working_directory, previous_working_directory = _sample_config(
                 optimization_dir, sampler
             )
 
-            config_lock_file = config_working_directory / ".config_lock"
+            config_lock_file = working_directory / ".config_lock"
             config_lock_file.touch(exist_ok=True)
             config_locker = Locker(config_lock_file)
             config_lock_acquired = config_locker.acquire_lock()
             decision_locker.release_lock()
             if config_lock_acquired:
                 _evaluate_config(
-                    config,
-                    config_working_directory,
-                    evaluation_fn,
-                    previous_working_directory,
+                    config, working_directory, evaluation_fn, previous_working_directory
                 )
                 config_locker.release_lock()
         else:
