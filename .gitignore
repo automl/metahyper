@@ -8,6 +8,7 @@ poetry.lock
 # Experiments and data
 results/*
 data/*
+test_opt_dir/*
 
 # Latex
 *.aux
