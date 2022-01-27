@@ -35,6 +35,9 @@ if __name__ == "__main__":
     config_space = None
     sampler = Sampler(config_space)
     opt_dir = "test_opt_dir"
+    logger = logging.getLogger("metahyper")
 
-    metahyper.run(evaluation_fn, sampler, optimization_dir=opt_dir)
+    metahyper.run(
+        evaluation_fn, sampler, optimization_dir=opt_dir, max_evaluations=5, logger=logger
+    )
     previous_results, pending_configs, pending_configs_free = metahyper.read(opt_dir)

@@ -9,12 +9,10 @@ import more_itertools
 
 from metahyper._locker import Locker
 
-logger = logging.getLogger("metahyper")
 
-
-def _check_max_evaluations(optimization_dir, max_evaluations):
+def _check_max_evaluations(optimization_dir, max_evaluations, logger):
     logger.debug("Checking if max evaluations is reached")
-    previous_results, *_ = read(optimization_dir)
+    previous_results, *_ = read(optimization_dir, logger)
     max_evaluations_is_reached = (
         max_evaluations is not None and len(previous_results) >= max_evaluations
     )
@@ -24,8 +22,10 @@ def _check_max_evaluations(optimization_dir, max_evaluations):
     return False
 
 
-def _sample_config(optimization_dir, sampler):
-    previous_results, pending_configs, pending_configs_free = read(optimization_dir)
+def _sample_config(optimization_dir, sampler, logger):
+    previous_results, pending_configs, pending_configs_free = read(
+        optimization_dir, logger
+    )
     logger.info(
         f"Read in {len(previous_results)} previous results and "
         f"{len(pending_configs)} pending evaluations "
@@ -71,7 +71,7 @@ def _sample_config(optimization_dir, sampler):
 
 
 def _evaluate_config(
-    config, working_directory, evaluation_fn, previous_working_directory
+    config, working_directory, evaluation_fn, previous_working_directory, logger
 ):
     config_id = working_directory.name[len("config_") :]
     logger.info(f"Start evaluating config {config_id}")
@@ -101,8 +101,10 @@ def _evaluate_config(
 ConfigResult = collections.namedtuple("ConfigResult", ["config", "result"])
 
 
-def read(optimization_dir):
+def read(optimization_dir, logger=None):
     base_result_directory = Path(optimization_dir) / "results"
+    if logger is None:
+        logger = logging.getLogger("metahyper")
     logger.debug(f"Loading state from {base_result_directory}")
 
     previous_results = dict()
@@ -124,7 +126,7 @@ def read(optimization_dir):
                 pending_configs[config_id] = dill.load(config_file_stream)
 
             config_lock_file = config_dir / ".config_lock"
-            config_locker = Locker(config_lock_file)
+            config_locker = Locker(config_lock_file, logger.getChild("_locker"))
             if config_locker.acquire_lock():
                 pending_configs_free[config_id] = pending_configs[config_id]
         else:
@@ -146,7 +148,11 @@ def run(
     development_stage_id=None,
     task_id=None,
     max_evaluations=None,
+    logger=None,
 ):
+    if logger is None:
+        logger = logging.getLogger("metahyper")
+
     optimization_dir = Path(optimization_dir)
     if development_stage_id is not None:
         optimization_dir = Path(optimization_dir) / f"dev_{development_stage_id}"
@@ -158,28 +164,32 @@ def run(
 
     decision_lock_file = optimization_dir / ".decision_lock"
     decision_lock_file.touch(exist_ok=True)
-    decision_locker = Locker(decision_lock_file)
+    decision_locker = Locker(decision_lock_file, logger.getChild("_locker"))
 
     while True:
         if max_evaluations is not None and _check_max_evaluations(
-            optimization_dir, max_evaluations
+            optimization_dir, max_evaluations, logger
         ):
             logger.info("Maximum evaluation reached, shutting down")
             break
 
         if decision_locker.acquire_lock():
             config, working_directory, previous_working_directory = _sample_config(
-                optimization_dir, sampler
+                optimization_dir, sampler, logger
             )
 
             config_lock_file = working_directory / ".config_lock"
             config_lock_file.touch(exist_ok=True)
-            config_locker = Locker(config_lock_file)
+            config_locker = Locker(config_lock_file, logger.getChild("_locker"))
             config_lock_acquired = config_locker.acquire_lock()
             decision_locker.release_lock()
             if config_lock_acquired:
                 _evaluate_config(
-                    config, working_directory, evaluation_fn, previous_working_directory
+                    config,
+                    working_directory,
+                    evaluation_fn,
+                    previous_working_directory,
+                    logger,
                 )
                 config_locker.release_lock()
         else:
