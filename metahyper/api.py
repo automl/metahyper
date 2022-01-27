@@ -82,10 +82,17 @@ def _evaluate_config(
             directory_params["working_directory"] = working_directory
         if "previous_working_directory" in evaluation_fn_params:
             directory_params["previous_working_directory"] = previous_working_directory
-        result = evaluation_fn(
-            **directory_params,
-            **config,
-        )
+
+        if isinstance(config, dict):
+            result = evaluation_fn(
+                **directory_params,
+                **config,
+            )
+        else:
+            result = evaluation_fn(
+                **directory_params,
+                config=config,
+            )
     except Exception:
         logger.exception(f"An error occured during evaluation of config {config}:")
         result = "error"
