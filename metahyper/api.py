@@ -83,12 +83,12 @@ def _evaluate_config(
         if "previous_working_directory" in evaluation_fn_params:
             directory_params["previous_working_directory"] = previous_working_directory
 
-        if isinstance(config, dict):
+        try:
             result = evaluation_fn(
                 **directory_params,
                 **config,
             )
-        else:
+        except TypeError:
             result = evaluation_fn(
                 **directory_params,
                 config=config,
