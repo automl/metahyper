@@ -71,26 +71,36 @@ def _sample_config(optimization_dir, sampler, logger):
 
 
 def _evaluate_config(
-    config, working_directory, evaluation_fn, previous_working_directory, logger
+    config,
+    working_directory,
+    evaluation_fn,
+    previous_working_directory,
+    logger,
+    evaluation_fn_args,
+    evaluation_fn_kwargs,
 ):
     config_id = working_directory.name[len("config_") :]
     logger.info(f"Start evaluating config {config_id}")
     try:
         evaluation_fn_params = inspect.signature(evaluation_fn).parameters
-        directory_params = dict()
+        directory_params = []
         if "working_directory" in evaluation_fn_params:
-            directory_params["working_directory"] = working_directory
+            directory_params.append(working_directory)
         if "previous_working_directory" in evaluation_fn_params:
-            directory_params["previous_working_directory"] = previous_working_directory
+            directory_params.append(previous_working_directory)
 
         try:
             result = evaluation_fn(
-                **directory_params,
+                *directory_params,
+                *evaluation_fn_args,
+                **evaluation_fn_kwargs,
                 **config,
             )
         except TypeError:
             result = evaluation_fn(
-                **directory_params,
+                *directory_params,
+                *evaluation_fn_args,
+                **evaluation_fn_kwargs,
                 config=config,
             )
     except Exception:
@@ -156,9 +166,16 @@ def run(
     task_id=None,
     max_evaluations=None,
     logger=None,
+    evaluation_fn_args=None,
+    evaluation_fn_kwargs=None,
 ):
     if logger is None:
         logger = logging.getLogger("metahyper")
+
+    if evaluation_fn_args is None:
+        evaluation_fn_args = list()
+    if evaluation_fn_kwargs is None:
+        evaluation_fn_kwargs = dict()
 
     optimization_dir = Path(optimization_dir)
     if development_stage_id is not None:
@@ -197,6 +214,8 @@ def run(
                     evaluation_fn,
                     previous_working_directory,
                     logger,
+                    evaluation_fn_args,
+                    evaluation_fn_kwargs,
                 )
                 config_locker.release_lock()
         else:
