@@ -10,16 +10,21 @@ import more_itertools
 from metahyper._locker import Locker
 
 
-def _check_max_evaluations(optimization_dir, max_evaluations, logger):
+def _check_max_evaluations(
+    optimization_dir, max_evaluations, logger, continue_until_max_evaluation_completed
+):
     logger.debug("Checking if max evaluations is reached")
-    previous_results, *_ = read(optimization_dir, logger)
-    max_evaluations_is_reached = (
-        max_evaluations is not None and len(previous_results) >= max_evaluations
-    )
-    if max_evaluations_is_reached:
+    previous_results, pending_configs, _ = read(optimization_dir, logger)
+
+    if continue_until_max_evaluation_completed:
+        max_reached = len(previous_results) >= max_evaluations
+    else:
+        max_reached = len(previous_results) + len(pending_configs) >= max_evaluations
+
+    if max_reached:
         logger.debug("Max evaluations is reached")
-        return True
-    return False
+
+    return max_reached
 
 
 def _sample_config(optimization_dir, sampler, logger):
@@ -66,7 +71,7 @@ def _sample_config(optimization_dir, sampler, logger):
     with Path(config_working_directory, "config.dill").open("wb") as config_stream:
         dill.dump(config, config_stream)
 
-    logger.info(f"Sampled config {config_id}")
+    logger.debug(f"Sampled config {config_id}")
     return config, config_working_directory, previous_working_directory
 
 
@@ -162,9 +167,11 @@ def run(
     evaluation_fn,
     sampler,
     optimization_dir,
+    max_evaluations_total=None,
+    max_evaluations_per_run=None,
+    continue_until_max_evaluation_completed=False,
     development_stage_id=None,
     task_id=None,
-    max_evaluations=None,
     logger=None,
     evaluation_fn_args=None,
     evaluation_fn_kwargs=None,
@@ -190,11 +197,22 @@ def run(
     decision_lock_file.touch(exist_ok=True)
     decision_locker = Locker(decision_lock_file, logger.getChild("_locker"))
 
+    evaluations_in_this_run = 0
     while True:
-        if max_evaluations is not None and _check_max_evaluations(
-            optimization_dir, max_evaluations, logger
+        if max_evaluations_total is not None and _check_max_evaluations(
+            optimization_dir,
+            max_evaluations_total,
+            logger,
+            continue_until_max_evaluation_completed,
         ):
-            logger.info("Maximum evaluation reached, shutting down")
+            logger.info("Maximum total evaluations is reached, shutting down")
+            break
+
+        if (
+            max_evaluations_per_run is not None
+            and evaluations_in_this_run >= max_evaluations_per_run
+        ):
+            logger.info("Maximum evaluations per run is reached, shutting down")
             break
 
         if decision_locker.acquire_lock():
@@ -218,5 +236,6 @@ def run(
                     evaluation_fn_kwargs,
                 )
                 config_locker.release_lock()
+                evaluations_in_this_run += 1
         else:
             time.sleep(5)
