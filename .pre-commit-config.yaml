@@ -14,6 +14,13 @@ repos:
     hooks:
       - id: black
 
+  - repo: https://github.com/MarcoGorelli/absolufy-imports
+    rev: v0.3.0
+    hooks:
+    - id: absolufy-imports
+      args: [--never]
+      exclude: ^(metahyper_examples)
+
   - repo: https://github.com/PyCQA/isort
     rev: 5.10.1
     hooks:
@@ -34,6 +41,11 @@ repos:
       - mdformat-tables
       - mdformat-beautysh
       - mdformat-black
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v0.930
+    hooks:
+      - id: mypy
 
   - repo: https://github.com/PyCQA/pylint
     rev: v2.12.2

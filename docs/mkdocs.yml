@@ -1,0 +1,9 @@
+site_name: Metahyper Documentation
+docs_dir: site
+repo_url: https://github.com/automl/metahyper
+repo_name: automl/metahyper
+edit_uri: ""
+theme:
+  name: material
+  icon:
+    repo: fontawesome/brands/github

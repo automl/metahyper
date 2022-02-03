@@ -19,6 +19,10 @@ more-itertools = "^8.12.0"
 jupyter = "^1.0"
 pre-commit = "^2.10"
 
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
 [tool.black]
 line-length = 90
 target-version = ['py37']
@@ -26,6 +30,15 @@ target-version = ['py37']
 [tool.isort]
 profile = 'black'
 line_length = 90
+
+[tool.mypy]
+files = ["metahyper"]
+namespace_packages = true
+follow_imports = "skip"
+ignore_missing_imports = true
+show_error_codes = true
+incremental = false
+explicit_package_bases = true
 
 [tool.pylint.messages_control]
 disable = 'all'
@@ -52,7 +65,7 @@ enable = [
     'raise-missing-from','consider-using-namedtuple-or-dataclass','consider-using-tuple','bad-open-mode',
     'redundant-unittest-assert','boolean-datetime','deprecated-methodimport-error','import-self','reimported',
     'relative-import','deprecated-module','wildcard-import','misplaced-future','cyclic-import','wrong-import-position',
-    'ungrouped-imports','multiple-imports','simplifiable-condition','len-as-condition','consider-using-from-import',
+    'ungrouped-imports','multiple-imports','simplifiable-condition','len-as-condition',
     'unpacking-non-sequence','invalid-all-object','unbalanced-tuple-unpacking','undefined-variable',
     'undefined-all-variable','used-before-assignment','cell-var-from-loop','global-variable-undefined',
     'redefined-builtin','redefine-in-handler','unused-import','unused-argument','unused-wildcard-import',
@@ -61,7 +74,7 @@ enable = [
     'mixed-format-string','too-few-format-args','bad-str-strip-call','too-many-format-args','bad-format-character',
     'format-combined-specification','bad-format-string-key','bad-format-string','missing-format-attribute',
     'missing-format-argument-key','unused-format-string-argument','unused-format-string-key','invalid-format-index',
-    'f-string-without-interpolation','use-maxsplit-arg','consider-using-f-string','anomalous-unicode-escape-in-string',
+    'f-string-without-interpolation','use-maxsplit-arg','anomalous-unicode-escape-in-string',
     'anomalous-backslash-in-string','redundant-u-string-prefix','format-string-without-interpolation',
     'simplifiable-if-statement','logging-format-truncated','logging-too-few-args','logging-too-many-args',
     'logging-unsupported-format','not-an-iterable','not-a-mapping','use-sequence-for-iteration','bad-indentation',
@@ -78,7 +91,3 @@ enable = [
     'invalid-getnewargs-ex-returned','super-with-arguments','deprecated-class','invalid-class-object',
     'unused-private-member',
 ]
-
-[build-system]
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
