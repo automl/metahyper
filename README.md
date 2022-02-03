@@ -1,9 +1,28 @@
-# MetaHyper
+# Metahyper
 
-## Developer Install
+Parallelisation and distribution framework for neural pipeline search algorithms.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md).
+Features:
 
-## License
+- Asynchronous parallelization and distribution
+- Fault tolerance
+- Agnostic to search space
 
-[MIT](LICENSE)
+![Python versions](https://img.shields.io/badge/python-3.7%20%7C%203.8%20%7C%203.9%20%7C%203.10-informational)
+[![License](https://img.shields.io/badge/license-MIT-informational)](LICENSE)
+
+## Installation
+
+Using pip
+
+```bash
+pip install git+https://github.com/automl/metahyper.git
+```
+
+## Usage
+
+Please see our examples in [metahyper_examples](metahyper_examples).
+
+## Contributing
+
+Please see our guidelines and guides for contributors at [CONTRIBUTING.md](CONTRIBUTING.md).
