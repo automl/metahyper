@@ -7,7 +7,7 @@ from pathlib import Path
 import dill
 import more_itertools
 
-from metahyper._locker import Locker
+from ._locker import Locker
 
 
 def _check_max_evaluations(
@@ -94,6 +94,7 @@ def _evaluate_config(
         if "previous_working_directory" in evaluation_fn_params:
             directory_params.append(previous_working_directory)
 
+        start_time = time.time()
         try:
             result = evaluation_fn(
                 *directory_params,
@@ -113,6 +114,11 @@ def _evaluate_config(
         result = "error"
     except KeyboardInterrupt as e:
         raise e
+
+    end_time = time.time()
+    result["metrics"] = dict(
+        start_time=start_time, end_time=end_time, duration_seconds=end_time - start_time
+    )
 
     with Path(working_directory, "result.dill").open("wb") as result_open:
         dill.dump(result, result_open)
