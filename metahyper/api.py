@@ -31,7 +31,7 @@ def _sample_config(optimization_dir, sampler, logger):
     previous_results, pending_configs, pending_configs_free = read(
         optimization_dir, logger
     )
-    logger.info(
+    logger.debug(
         f"Read in {len(previous_results)} previous results and "
         f"{len(pending_configs)} pending evaluations "
         f"({len(pending_configs_free)} without a worker)"
