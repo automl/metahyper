@@ -51,11 +51,14 @@ def _sample_config(optimization_dir, sampler, logger):
     else:
         logger.debug("Sampling a new configuration")
         sampler.load_results(previous_results, pending_configs)
-
         config, config_id, previous_config_id = sampler.get_config_and_ids()
 
         config_working_directory = base_result_directory / f"config_{config_id}"
         config_working_directory.mkdir(exist_ok=True)
+
+        Path(config_working_directory, "time_sampled.txt").write_text(
+            str(time.time()), encoding="utf-8"
+        )
         if previous_config_id is not None:
             previous_config_id_file = config_working_directory / "previous_config.id"
             previous_config_id_file.write_text(previous_config_id)
@@ -94,7 +97,6 @@ def _evaluate_config(
         if "previous_working_directory" in evaluation_fn_params:
             directory_params.append(previous_working_directory)
 
-        start_time = time.time()
         try:
             result = evaluation_fn(
                 *directory_params,
@@ -115,10 +117,7 @@ def _evaluate_config(
     except KeyboardInterrupt as e:
         raise e
 
-    end_time = time.time()
-    result["metrics"] = dict(
-        start_time=start_time, end_time=end_time, duration_seconds=end_time - start_time
-    )
+    Path(working_directory, "time_end.txt").write_text(str(time.time()), encoding="utf-8")
 
     with Path(working_directory, "result.dill").open("wb") as result_open:
         dill.dump(result, result_open)
@@ -159,7 +158,7 @@ def read(optimization_dir, logger=None):
                 pending_configs_free[config_id] = pending_configs[config_id]
         else:
             logger.info(f"Removing {config_dir} as worker died during config sampling.")
-            config_dir.rmdir()  # Worker crashed
+            config_dir.rmdir()
 
     logger.debug(
         f"Read in previous_results={previous_results}, "
