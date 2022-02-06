@@ -1,1 +1,1 @@
-from metahyper.api import read, run
+from .api import read, run

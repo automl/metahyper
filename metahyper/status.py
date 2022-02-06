@@ -3,7 +3,7 @@ import logging
 import pathlib
 import pprint
 
-from metahyper.api import read
+from .api import read
 
 parser = argparse.ArgumentParser()
 parser.add_argument("run_directory", type=pathlib.Path)
