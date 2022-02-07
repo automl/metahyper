@@ -86,6 +86,7 @@ def _evaluate_config(
     logger,
     evaluation_fn_args,
     evaluation_fn_kwargs,
+    post_evaluation_hook,
 ):
     config_id = working_directory.name[len("config_") :]
     logger.info(f"Start evaluating config {config_id}")
@@ -112,7 +113,9 @@ def _evaluate_config(
                 config=config,
             )
     except Exception:
-        logger.exception(f"An error occured during evaluation of config {config}:")
+        logger.exception(
+            f"An error occured during evaluation of config {config_id}: " f"{config}."
+        )
         result = "error"
     except KeyboardInterrupt as e:
         raise e
@@ -122,7 +125,10 @@ def _evaluate_config(
     with Path(working_directory, "result.dill").open("wb") as result_open:
         dill.dump(result, result_open)
 
-    logger.info(f"Finished evaluating config {config_id}")
+    if post_evaluation_hook is not None:
+        post_evaluation_hook(config, config_id, working_directory, result, logger)
+    else:
+        logger.info(f"Finished evaluating config {config_id}")
 
 
 ConfigResult = collections.namedtuple("ConfigResult", ["config", "result"])
@@ -180,6 +186,7 @@ def run(
     logger=None,
     evaluation_fn_args=None,
     evaluation_fn_kwargs=None,
+    post_evaluation_hook=None,
 ):
     if logger is None:
         logger = logging.getLogger("metahyper")
@@ -239,6 +246,7 @@ def run(
                     logger,
                     evaluation_fn_args,
                     evaluation_fn_kwargs,
+                    post_evaluation_hook,
                 )
                 config_locker.release_lock()
                 evaluations_in_this_run += 1
