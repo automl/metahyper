@@ -3,15 +3,11 @@ import uuid
 
 
 class Sampler:
-    def __init__(self, config_space):
-        self.config_space = config_space
+    def __init__(self):
         self.results = dict()
 
     def load_results(self, results, pending_configs):
-        self.results = {**self.results, **results}
-
-    def new_result(self, result, config_id):
-        self.results[config_id] = result
+        self.results = results
 
     def get_config_and_ids(self):
         config = dict(a=len(self.results))
@@ -21,8 +17,8 @@ class Sampler:
 
 
 def evaluation_fn(working_directory, **config):
-    time.sleep(20)
-    return "evald"
+    time.sleep(15)
+    return 5
 
 
 if __name__ == "__main__":
@@ -32,11 +28,8 @@ if __name__ == "__main__":
 
     logging.basicConfig(level=logging.INFO)
 
-    config_space = None
-    sampler = Sampler(config_space)
     opt_dir = "test_opt_dir"
-
     metahyper.run(
-        evaluation_fn, sampler, optimization_dir=opt_dir, max_evaluations_total=5
+        evaluation_fn, Sampler(), optimization_dir=opt_dir, max_evaluations_total=5
     )
-    previous_results, pending_configs, pending_configs_free = metahyper.read(opt_dir)
+    previous_results, pending_configs, _ = metahyper.read(opt_dir)
