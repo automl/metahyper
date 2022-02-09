@@ -21,16 +21,16 @@ class ConfigResult:
 
 
 class Sampler(ABC):
-    def get_state(self) -> Any:
-        raise NotImplementedError
+    def get_state(self) -> Any:  # pylint: disable=no-self-use
+        return None
 
     def load_state(self, state: Any):
-        raise NotImplementedError
+        pass
 
     def load_results(
         self, results: dict[Any, ConfigResult], pending_configs: dict[Any, ConfigResult]
     ) -> None:
-        raise NotImplementedError
+        pass
 
     @abstractmethod
     def get_config_and_ids(self) -> tuple[Any, str, str]:
