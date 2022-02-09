@@ -1,1 +1,1 @@
-from .api import read, run
+from .api import Sampler, read, run

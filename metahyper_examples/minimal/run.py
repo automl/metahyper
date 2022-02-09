@@ -1,8 +1,10 @@
 import time
 import uuid
 
+import metahyper
 
-class Sampler:
+
+class MinimalSampler(metahyper.Sampler):
     def __init__(self):
         self.results = dict()
 
@@ -24,12 +26,11 @@ def evaluation_fn(working_directory, **config):
 if __name__ == "__main__":
     import logging
 
-    import metahyper
-
     logging.basicConfig(level=logging.INFO)
 
     opt_dir = "test_opt_dir"
+    sampler = MinimalSampler()
     metahyper.run(
-        evaluation_fn, Sampler(), optimization_dir=opt_dir, max_evaluations_total=5
+        evaluation_fn, sampler, optimization_dir=opt_dir, max_evaluations_total=5
     )
     previous_results, pending_configs, _ = metahyper.read(opt_dir)
