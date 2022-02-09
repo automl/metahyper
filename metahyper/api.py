@@ -33,7 +33,7 @@ class Sampler(ABC):
         pass
 
     @abstractmethod
-    def get_config_and_ids(self) -> tuple[Any, str, str]:
+    def get_config_and_ids(self) -> tuple[Any, str, str | None]:
         """
         Returns:
             config
