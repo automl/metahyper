@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import inspect
 import logging
+import shutil
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -249,6 +250,7 @@ def run(
     evaluation_fn_args=None,
     evaluation_fn_kwargs=None,
     post_evaluation_hook=None,
+    overwrite_optimization_dir=False,
 ):
     if logger is None:
         logger = logging.getLogger("metahyper")
@@ -259,6 +261,10 @@ def run(
         evaluation_fn_kwargs = dict()
 
     optimization_dir = Path(optimization_dir)
+    if overwrite_optimization_dir and optimization_dir.exists():
+        logger.warning("Overwriting working_directory")
+        shutil.rmtree(optimization_dir)
+
     if development_stage_id is not None:
         optimization_dir = Path(optimization_dir) / f"dev_{development_stage_id}"
     if task_id is not None:
