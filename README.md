@@ -5,8 +5,8 @@ Parallelisation and distribution framework for neural pipeline search algorithms
 Features:
 
 - Asynchronous parallelization and distribution
-- Fault tolerance
-- Agnostic to search space
+- Fault tolerance for crashes and job time limits
+- Agnostic to search space, objective functions, ...
 
 ![Python versions](https://img.shields.io/badge/python-3.7%20%7C%203.8%20%7C%203.9%20%7C%203.10-informational)
 [![License](https://img.shields.io/badge/license-MIT-informational)](LICENSE)
@@ -16,7 +16,7 @@ Features:
 Using pip
 
 ```bash
-pip install git+https://github.com/automl/metahyper.git
+pip install metahyper
 ```
 
 ## Usage
