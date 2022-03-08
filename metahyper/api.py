@@ -47,6 +47,10 @@ class Sampler(ABC):
         """
         raise NotImplementedError
 
+    def load_config(self, config: Any):
+        """Transform a serialized object into a configuration object"""
+        return config
+
 def _load_sampled_paths(optimization_dir: Path | str, serializer, logger):
     base_result_directory = Path(optimization_dir) / "results"
     logger.debug(f"Loading results from {base_result_directory}")
@@ -93,12 +97,12 @@ def read(optimization_dir: Path | str, serializer: str | Any = None, logger=None
     previous_results, pending_configs, pending_configs_free = {}, {}, {}
 
     for config_id, (config_dir, config_file, result_file) in previous_paths.items():
-        config = serializer.load(config_file)
+        config = serializer.load_config(config_file)
         result = serializer.load(result_file)
         previous_results[config_id] = ConfigResult(config, result)
 
     for config_id, (config_dir, config_file) in pending_paths.items():
-        pending_configs[config_id] = serializer.load(config_file)
+        pending_configs[config_id] = serializer.load_config(config_file)
 
         config_lock_file = config_dir / ".config_lock"
         config_locker = Locker(config_lock_file, logger.getChild("_locker"))
@@ -267,7 +271,8 @@ def run(
     post_evaluation_hook=None,
     overwrite_optimization_dir=False,
 ):
-    serializer = instanceFromMap(SerializerMapping, serializer, "serializer")
+    serializer_cls = instanceFromMap(SerializerMapping, serializer, "serializer", as_class=True)
+    serializer = serializer_cls(sampler.load_config)
     if logger is None:
         logger = logging.getLogger("metahyper")
 
