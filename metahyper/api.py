@@ -9,10 +9,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-import dill
 import more_itertools
 
 from ._locker import Locker
+from .utils import SerializerMapping, instanceFromMap
 
 
 @dataclass
@@ -23,9 +23,11 @@ class ConfigResult:
 
 class Sampler(ABC):
     def get_state(self) -> Any:  # pylint: disable=no-self-use
+        """Return a state for the sampler that will be used in every other thread"""
         return None
 
     def load_state(self, state: Any):
+        """Load a state for the sampler shared accross threads"""
         pass
 
     def load_results(
@@ -35,50 +37,73 @@ class Sampler(ABC):
 
     @abstractmethod
     def get_config_and_ids(self) -> tuple[Any, str, str | None]:
-        """
+        """Sample a new configuration
+
         Returns:
-            config
-            config_id
-            previous_config_id
+            config: serializable object representing the configuration
+            config_id: unique identifier for the configuration
+            previous_config_id: if provided, id of a previous on which this
+                configuration is based
         """
         raise NotImplementedError
 
-
-def read(optimization_dir: Path | str, logger=None):
+def _load_sampled_paths(optimization_dir: Path | str, serializer, logger):
     base_result_directory = Path(optimization_dir) / "results"
-    if logger is None:
-        logger = logging.getLogger("metahyper")
     logger.debug(f"Loading results from {base_result_directory}")
 
-    previous_results = dict()
-    pending_configs = dict()
-    pending_configs_free = dict()
+    previous_paths, pending_paths = {}, {}
     for config_dir in base_result_directory.iterdir():
         config_id = config_dir.name[len("config_") :]
-        result_file = config_dir / "result.dill"
-        config_file = config_dir / "config.dill"
+        config_file = config_dir / f"config{serializer.SUFFIX}"
+        result_file = config_dir / f"result{serializer.SUFFIX}"
+
         if result_file.exists():
-            with result_file.open("rb") as results_file_stream:
-                result = dill.load(results_file_stream)
-            with config_file.open("rb") as config_file_stream:
-                config = dill.load(config_file_stream)
-            previous_results[config_id] = ConfigResult(config, result)
-
+            previous_paths[config_id] = (config_dir, config_file, result_file)
         elif config_file.exists():
-            with config_file.open("rb") as config_file_stream:
-                pending_configs[config_id] = dill.load(config_file_stream)
-
-            config_lock_file = config_dir / ".config_lock"
-            config_locker = Locker(config_lock_file, logger.getChild("_locker"))
-            if config_locker.acquire_lock():
-                pending_configs_free[config_id] = pending_configs[config_id]
+            pending_paths[config_id] = (config_dir, config_file)
         else:
             # Should probably warn the user somehow about this, although it is not
             # dangerous
             logger.info(f"Removing {config_dir} as worker died during config sampling.")
-            # TODO: use shutil to remove recursively
-            # OSError: [Errno 39] Directory not empty: [...]
-            config_dir.rmdir()
+            try:
+                config_dir.rmdir()
+                # rmtree may cause problem if the user doesn't use the right serializer
+                # shutil.rmtree(str(config_dir))
+            except Exception as e: # The worker doesn't need to crash for this
+                logger.error(f"Can't delete {config_dir}: {e}")
+    return previous_paths, pending_paths
+
+def read(optimization_dir: Path | str, serializer: str | Any = None, logger=None):
+    # Try to guess the serialization method used
+    if serializer is None:
+        for name, serializer_cls in SerializerMapping.items():
+            state_path = optimization_dir / f".optimizer_state{serializer_cls.SUFFIX}"
+            if state_path.exists():
+                serializer = name
+                break
+        else:
+            serializer = "json"
+        logging.info(f"Will use the {serializer} serializer")
+
+    serializer = instanceFromMap(SerializerMapping, serializer, "serializer")
+    if logger is None:
+        logger = logging.getLogger("metahyper")
+
+    previous_paths, pending_paths = _load_sampled_paths(optimization_dir, serializer, logger)
+    previous_results, pending_configs, pending_configs_free = {}, {}, {}
+
+    for config_id, (config_dir, config_file, result_file) in previous_paths.items():
+        config = serializer.load(config_file)
+        result = serializer.load(result_file)
+        previous_results[config_id] = ConfigResult(config, result)
+
+    for config_id, (config_dir, config_file) in pending_paths.items():
+        pending_configs[config_id] = serializer.load(config_file)
+
+        config_lock_file = config_dir / ".config_lock"
+        config_locker = Locker(config_lock_file, logger.getChild("_locker"))
+        if config_locker.acquire_lock():
+            pending_configs_free[config_id] = pending_configs[config_id]
 
     logger.debug(
         f"Read in {len(previous_results)} previous results and "
@@ -94,32 +119,31 @@ def read(optimization_dir: Path | str, logger=None):
 
 
 def _check_max_evaluations(
-    optimization_dir, max_evaluations, logger, continue_until_max_evaluation_completed
+    optimization_dir, max_evaluations, serializer, logger, continue_until_max_evaluation_completed
 ):
     logger.debug("Checking if max evaluations is reached")
-    previous_results, pending_configs, _ = read(optimization_dir, logger)
 
-    if continue_until_max_evaluation_completed:
-        max_reached = len(previous_results) >= max_evaluations
-    else:
-        max_reached = len(previous_results) + len(pending_configs) >= max_evaluations
+    previous_paths, pending_paths = _load_sampled_paths(optimization_dir, serializer, logger)
+    evaluation_count = len(previous_paths)
 
-    if max_reached:
+    # Taking into account pending evaluations
+    if not continue_until_max_evaluation_completed:
+        evaluation_count += len(pending_paths)
+
+    if evaluation_count >= max_evaluations:
         logger.debug("Max evaluations is reached")
 
-    return max_reached
+    return evaluation_count >= max_evaluations
 
 
-def _sample_config(optimization_dir, sampler, logger):
+def _sample_config(optimization_dir, sampler, serializer, logger):
     # First load the results and state of the optimizer
     previous_results, pending_configs, pending_configs_free = read(
-        optimization_dir, logger
+        optimization_dir, serializer, logger
     )
-    optimizer_state_file = optimization_dir / ".optimizer_state.dill"
+    optimizer_state_file = optimization_dir / f".optimizer_state{serializer.SUFFIX}"
     if optimizer_state_file.exists():
-        with optimizer_state_file.open("rb") as optimizer_state_stream:
-            optimizer_state = dill.load(optimizer_state_stream)
-        sampler.load_state(optimizer_state)
+        sampler.load_state(serializer.load(optimizer_state_file))
 
     # Then, either:
     # If: Sample a previously sampled config that is now without worker
@@ -162,12 +186,10 @@ def _sample_config(optimization_dir, sampler, logger):
     optimizer_state = sampler.get_state()
     if optimizer_state is not None:
         logger.debug("State was not None, so now serialize it")
-        with optimizer_state_file.open("wb") as optimizer_state_stream:
-            dill.dump(optimizer_state, optimizer_state_stream)
+        serializer.dump(optimizer_state, optimizer_state_file)
 
     # We want this to be the last action in sampling to catch potential crashes
-    with Path(config_working_directory, "config.dill").open("wb") as config_stream:
-        dill.dump(config, config_stream)
+    serializer.dump(config, config_working_directory / f"config{serializer.SUFFIX}")
 
     logger.debug(f"Sampled config {config_id}")
     return config, config_working_directory, previous_working_directory
@@ -178,9 +200,8 @@ def _evaluate_config(
     working_directory,
     evaluation_fn,
     previous_working_directory,
+    serializer,
     logger,
-    evaluation_fn_args,
-    evaluation_fn_kwargs,
     post_evaluation_hook,
 ):
     # First, the actual evaluation along with error handling and support of multiple APIs
@@ -202,16 +223,12 @@ def _evaluate_config(
             # 2. Allowed to be captured as **configs
             result = evaluation_fn(
                 *directory_params,
-                *evaluation_fn_args,
-                **evaluation_fn_kwargs,
                 **config,
             )
         except TypeError:
             # 3. As a mere single keyword argument
             result = evaluation_fn(
                 *directory_params,
-                *evaluation_fn_args,
-                **evaluation_fn_kwargs,
                 config=config,
             )
     except Exception:
@@ -227,8 +244,7 @@ def _evaluate_config(
     Path(working_directory, "time_end.txt").write_text(str(time.time()), encoding="utf-8")
 
     # 2. The result returned by the evaluation_fn
-    with Path(working_directory, "result.dill").open("wb") as result_open:
-        dill.dump(result, result_open)
+    serializer.dump(result, working_directory / f"result{serializer.SUFFIX}")
 
     # 3. Anything the user might want to serialize (or do otherwise)
     if post_evaluation_hook is not None:
@@ -246,19 +262,14 @@ def run(
     continue_until_max_evaluation_completed=False,
     development_stage_id=None,
     task_id=None,
+    serializer: str | Any = "dill",
     logger=None,
-    evaluation_fn_args=None,
-    evaluation_fn_kwargs=None,
     post_evaluation_hook=None,
     overwrite_optimization_dir=False,
 ):
+    serializer = instanceFromMap(SerializerMapping, serializer, "serializer")
     if logger is None:
         logger = logging.getLogger("metahyper")
-
-    if evaluation_fn_args is None:
-        evaluation_fn_args = list()
-    if evaluation_fn_kwargs is None:
-        evaluation_fn_kwargs = dict()
 
     optimization_dir = Path(optimization_dir)
     if overwrite_optimization_dir and optimization_dir.exists():
@@ -282,6 +293,7 @@ def run(
         if max_evaluations_total is not None and _check_max_evaluations(
             optimization_dir,
             max_evaluations_total,
+            serializer,
             logger,
             continue_until_max_evaluation_completed,
         ):
@@ -297,7 +309,7 @@ def run(
 
         if decision_locker.acquire_lock():
             config, working_directory, previous_working_directory = _sample_config(
-                optimization_dir, sampler, logger
+                optimization_dir, sampler, serializer, logger
             )
 
             config_lock_file = working_directory / ".config_lock"
@@ -311,9 +323,8 @@ def run(
                     working_directory,
                     evaluation_fn,
                     previous_working_directory,
+                    serializer,
                     logger,
-                    evaluation_fn_args,
-                    evaluation_fn_kwargs,
                     post_evaluation_hook,
                 )
                 config_locker.release_lock()
