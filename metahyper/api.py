@@ -22,17 +22,17 @@ class ConfigResult:
 
 
 class Sampler(ABC):
-    # pylint: disable=no-self-use
+    # pylint: disable=no-self-use,unused-argument
 
-    def get_state(self) -> Any:  # pylint: disable=no-self-use
+    def get_state(self) -> Any:
         """Return a state for the sampler that will be used in every other thread"""
         return
 
-    def load_state(self, state: Any):  # pylint: disable=no-self-use,unused-argument
+    def load_state(self, state: Any):
         """Load a state for the sampler shared accross threads"""
         return
 
-    def load_results(  # pylint: disable=no-self-use,unused-argument
+    def load_results(
         self, results: dict[Any, ConfigResult], pending_configs: dict[Any, ConfigResult]
     ) -> None:
         return
