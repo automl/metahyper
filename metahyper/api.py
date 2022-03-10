@@ -4,6 +4,7 @@ import inspect
 import logging
 import shutil
 import time
+import warnings
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
@@ -12,7 +13,7 @@ from typing import Any
 import more_itertools
 
 from ._locker import Locker
-from .utils import SerializerMapping, instanceFromMap
+from .utils import SerializerMapping, instance_from_map
 
 
 @dataclass
@@ -26,9 +27,8 @@ class Sampler(ABC):
         """Return a state for the sampler that will be used in every other thread"""
         return None
 
-    def load_state(self, state: Any):
+    def load_state(self, state: Any):  # pylint: disable
         """Load a state for the sampler shared accross threads"""
-        pass
 
     def load_results(
         self, results: dict[Any, ConfigResult], pending_configs: dict[Any, ConfigResult]
@@ -47,9 +47,10 @@ class Sampler(ABC):
         """
         raise NotImplementedError
 
-    def load_config(self, config: Any):
+    def load_config(self, config: Any):  # pylint: disable=no-self-use
         """Transform a serialized object into a configuration object"""
         return config
+
 
 def _load_sampled_paths(optimization_dir: Path | str, serializer, logger):
     base_result_directory = Path(optimization_dir) / "results"
@@ -73,12 +74,14 @@ def _load_sampled_paths(optimization_dir: Path | str, serializer, logger):
                 config_dir.rmdir()
                 # rmtree may cause problem if the user doesn't use the right serializer
                 # shutil.rmtree(str(config_dir))
-            except Exception as e: # The worker doesn't need to crash for this
+            except Exception as e:  # The worker doesn't need to crash for this
                 logger.error(f"Can't delete {config_dir}: {e}")
     return previous_paths, pending_paths
 
+
 def read(optimization_dir: Path | str, serializer: str | Any = None, logger=None):
     # Try to guess the serialization method used
+    optimization_dir = Path(optimization_dir)
     if serializer is None:
         for name, serializer_cls in SerializerMapping.items():
             state_path = optimization_dir / f".optimizer_state{serializer_cls.SUFFIX}"
@@ -89,11 +92,13 @@ def read(optimization_dir: Path | str, serializer: str | Any = None, logger=None
             serializer = "json"
         logging.info(f"Will use the {serializer} serializer")
 
-    serializer = instanceFromMap(SerializerMapping, serializer, "serializer")
+    serializer = instance_from_map(SerializerMapping, serializer, "serializer")
     if logger is None:
         logger = logging.getLogger("metahyper")
 
-    previous_paths, pending_paths = _load_sampled_paths(optimization_dir, serializer, logger)
+    previous_paths, pending_paths = _load_sampled_paths(
+        optimization_dir, serializer, logger
+    )
     previous_results, pending_configs, pending_configs_free = {}, {}, {}
 
     for config_id, (config_dir, config_file, result_file) in previous_paths.items():
@@ -123,11 +128,17 @@ def read(optimization_dir: Path | str, serializer: str | Any = None, logger=None
 
 
 def _check_max_evaluations(
-    optimization_dir, max_evaluations, serializer, logger, continue_until_max_evaluation_completed
+    optimization_dir,
+    max_evaluations,
+    serializer,
+    logger,
+    continue_until_max_evaluation_completed,
 ):
     logger.debug("Checking if max evaluations is reached")
 
-    previous_paths, pending_paths = _load_sampled_paths(optimization_dir, serializer, logger)
+    previous_paths, pending_paths = _load_sampled_paths(
+        optimization_dir, serializer, logger
+    )
     evaluation_count = len(previous_paths)
 
     # Taking into account pending evaluations
@@ -229,19 +240,23 @@ def _evaluate_config(
                 *directory_params,
                 **config,
             )
-        except TypeError:
+        except TypeError:  # TODO : remove this part (deprecated part)
             # 3. As a mere single keyword argument
             result = evaluation_fn(
                 *directory_params,
                 config=config,
+            )
+            warnings.warn(
+                "Using the config argument for the evaluation function will"
+                "soon be removed. Please use keyword arguments, or catch the"
+                "config with '**config'.",
+                FutureWarning,
             )
     except Exception:
         logger.exception(
             f"An error occured during evaluation of config {config_id}: " f"{config}."
         )
         result = "error"
-    except KeyboardInterrupt as e:
-        raise e
 
     # Finally, we now dump all information to disk:
     # 1. When was the evaluation completed
@@ -264,14 +279,16 @@ def run(
     max_evaluations_total=None,
     max_evaluations_per_run=None,
     continue_until_max_evaluation_completed=False,
-    development_stage_id=None,
-    task_id=None,
-    serializer: str | Any = "dill",
+    development_stage_id=None,  # pylint: disable=unused-argument
+    task_id=None,  # pylint: disable=unused-argument
+    serializer: str | Any = "json",
     logger=None,
     post_evaluation_hook=None,
     overwrite_optimization_dir=False,
 ):
-    serializer_cls = instanceFromMap(SerializerMapping, serializer, "serializer", as_class=True)
+    serializer_cls = instance_from_map(
+        SerializerMapping, serializer, "serializer", as_class=True
+    )
     serializer = serializer_cls(sampler.load_config)
     if logger is None:
         logger = logging.getLogger("metahyper")
@@ -281,10 +298,11 @@ def run(
         logger.warning("Overwriting working_directory")
         shutil.rmtree(optimization_dir)
 
-    if development_stage_id is not None:
-        optimization_dir = Path(optimization_dir) / f"dev_{development_stage_id}"
-    if task_id is not None:
-        optimization_dir = Path(optimization_dir) / f"task_{task_id}"
+    # TODO
+    # if development_stage_id is not None:
+    #     optimization_dir = Path(optimization_dir) / f"dev_{development_stage_id}"
+    # if task_id is not None:
+    #     optimization_dir = Path(optimization_dir) / f"task_{task_id}"
 
     base_result_directory = optimization_dir / "results"
     base_result_directory.mkdir(parents=True, exist_ok=True)
