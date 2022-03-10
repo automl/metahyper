@@ -22,18 +22,20 @@ class ConfigResult:
 
 
 class Sampler(ABC):
+    # pylint: disable=no-self-use
+
     def get_state(self) -> Any:  # pylint: disable=no-self-use
         """Return a state for the sampler that will be used in every other thread"""
-        return None
+        return
 
-    def load_state(self, state: Any):
+    def load_state(self, state: Any):  # pylint: disable=no-self-use,unused-argument
         """Load a state for the sampler shared accross threads"""
-        pass
+        return
 
-    def load_results(
+    def load_results(  # pylint: disable=no-self-use,unused-argument
         self, results: dict[Any, ConfigResult], pending_configs: dict[Any, ConfigResult]
     ) -> None:
-        pass
+        return
 
     @abstractmethod
     def get_config_and_ids(self) -> tuple[Any, str, str | None]:
@@ -51,8 +53,10 @@ class Sampler(ABC):
         """Transform a serialized object into a configuration object"""
         return config
 
+
 def _load_sampled_paths(optimization_dir: Path | str, serializer, logger):
-    base_result_directory = Path(optimization_dir) / "results"
+    optimization_dir = Path(optimization_dir)
+    base_result_directory = optimization_dir / "results"
     logger.debug(f"Loading results from {base_result_directory}")
 
     previous_paths, pending_paths = {}, {}
@@ -73,11 +77,14 @@ def _load_sampled_paths(optimization_dir: Path | str, serializer, logger):
                 config_dir.rmdir()
                 # rmtree may cause problem if the user doesn't use the right serializer
                 # shutil.rmtree(str(config_dir))
-            except Exception as e: # The worker doesn't need to crash for this
+            except Exception as e:  # The worker doesn't need to crash for this
                 logger.error(f"Can't delete {config_dir}: {e}")
     return previous_paths, pending_paths
 
+
 def read(optimization_dir: Path | str, serializer: str | Any = None, logger=None):
+    optimization_dir = Path(optimization_dir)
+
     # Try to guess the serialization method used
     if serializer is None:
         for name, serializer_cls in SerializerMapping.items():
@@ -93,7 +100,9 @@ def read(optimization_dir: Path | str, serializer: str | Any = None, logger=None
     if logger is None:
         logger = logging.getLogger("metahyper")
 
-    previous_paths, pending_paths = _load_sampled_paths(optimization_dir, serializer, logger)
+    previous_paths, pending_paths = _load_sampled_paths(
+        optimization_dir, serializer, logger
+    )
     previous_results, pending_configs, pending_configs_free = {}, {}, {}
 
     for config_id, (config_dir, config_file, result_file) in previous_paths.items():
@@ -123,11 +132,17 @@ def read(optimization_dir: Path | str, serializer: str | Any = None, logger=None
 
 
 def _check_max_evaluations(
-    optimization_dir, max_evaluations, serializer, logger, continue_until_max_evaluation_completed
+    optimization_dir,
+    max_evaluations,
+    serializer,
+    logger,
+    continue_until_max_evaluation_completed,
 ):
     logger.debug("Checking if max evaluations is reached")
 
-    previous_paths, pending_paths = _load_sampled_paths(optimization_dir, serializer, logger)
+    previous_paths, pending_paths = _load_sampled_paths(
+        optimization_dir, serializer, logger
+    )
     evaluation_count = len(previous_paths)
 
     # Taking into account pending evaluations
@@ -271,7 +286,9 @@ def run(
     post_evaluation_hook=None,
     overwrite_optimization_dir=False,
 ):
-    serializer_cls = instanceFromMap(SerializerMapping, serializer, "serializer", as_class=True)
+    serializer_cls = instanceFromMap(
+        SerializerMapping, serializer, "serializer", as_class=True
+    )
     serializer = serializer_cls(sampler.load_config)
     if logger is None:
         logger = logging.getLogger("metahyper")
