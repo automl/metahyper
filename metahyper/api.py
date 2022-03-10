@@ -23,9 +23,11 @@ class ConfigResult:
 
 
 class Sampler(ABC):
-    def get_state(self) -> Any:  # pylint: disable=no-self-use
+    # pylint: disable=no-self-use,unused-argument
+
+    def get_state(self) -> Any:
         """Return a state for the sampler that will be used in every other thread"""
-        return None
+        return
 
     def load_state(self, state: Any):  # pylint: disable
         """Load a state for the sampler shared accross threads"""
@@ -33,7 +35,7 @@ class Sampler(ABC):
     def load_results(
         self, results: dict[Any, ConfigResult], pending_configs: dict[Any, ConfigResult]
     ) -> None:
-        pass
+        return
 
     @abstractmethod
     def get_config_and_ids(self) -> tuple[Any, str, str | None]:
@@ -53,7 +55,8 @@ class Sampler(ABC):
 
 
 def _load_sampled_paths(optimization_dir: Path | str, serializer, logger):
-    base_result_directory = Path(optimization_dir) / "results"
+    optimization_dir = Path(optimization_dir)
+    base_result_directory = optimization_dir / "results"
     logger.debug(f"Loading results from {base_result_directory}")
 
     previous_paths, pending_paths = {}, {}
@@ -80,6 +83,8 @@ def _load_sampled_paths(optimization_dir: Path | str, serializer, logger):
 
 
 def read(optimization_dir: Path | str, serializer: str | Any = None, logger=None):
+    optimization_dir = Path(optimization_dir)
+
     # Try to guess the serialization method used
     optimization_dir = Path(optimization_dir)
     if serializer is None:
