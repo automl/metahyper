@@ -281,7 +281,7 @@ def run(
     continue_until_max_evaluation_completed=False,
     development_stage_id=None,  # pylint: disable=unused-argument
     task_id=None,  # pylint: disable=unused-argument
-    serializer: str | Any = "json",
+    serializer: str | Any = "yaml",
     logger=None,
     post_evaluation_hook=None,
     overwrite_optimization_dir=False,

@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 import dill
+import yaml
 
 # Serializers
 
@@ -60,7 +61,22 @@ class JsonSerializer(DataSerializer):
             return json.dump(data, file_stream)
 
 
+class YamlSerializer(DataSerializer):
+    SUFFIX = ".yaml"
+
+    def load(self, path: Path | str):
+        with open(str(path)) as file_stream:
+            return yaml.full_load(file_stream)
+
+    def dump(self, data: Any, path: Path | str):
+        if hasattr(data, "serialize"):
+            data = data.serialize()
+        with open(str(path), "w") as file_stream:
+            return yaml.dump(data, file_stream)
+
+
 SerializerMapping = {
+    "yaml": YamlSerializer,
     "json": JsonSerializer,
     "dill": DillSerializer,
 }
