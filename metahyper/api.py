@@ -13,7 +13,7 @@ from typing import Any
 import more_itertools
 
 from ._locker import Locker
-from .utils import SerializerMapping, instance_from_map
+from .utils import SerializerMapping, find_files, instance_from_map
 
 
 @dataclass
@@ -61,6 +61,8 @@ def _load_sampled_paths(optimization_dir: Path | str, serializer, logger):
 
     previous_paths, pending_paths = {}, {}
     for config_dir in base_result_directory.iterdir():
+        if not config_dir.is_dir():
+            continue
         config_id = config_dir.name[len("config_") :]
         config_file = config_dir / f"config{serializer.SUFFIX}"
         result_file = config_dir / f"result{serializer.SUFFIX}"
@@ -70,15 +72,23 @@ def _load_sampled_paths(optimization_dir: Path | str, serializer, logger):
         elif config_file.exists():
             pending_paths[config_id] = (config_dir, config_file)
         else:
-            # Should probably warn the user somehow about this, although it is not
-            # dangerous
-            logger.info(f"Removing {config_dir} as worker died during config sampling.")
-            try:
-                config_dir.rmdir()
-                # rmtree may cause problem if the user doesn't use the right serializer
-                # shutil.rmtree(str(config_dir))
-            except Exception as e:  # The worker doesn't need to crash for this
-                logger.error(f"Can't delete {config_dir}: {e}")
+            existing_config = find_files(
+                config_dir, ["config"], any_suffix=True, check_nonempty=True
+            )
+            if existing_config:
+                existing_format = existing_config[0].suffix
+                logger.warning(
+                    f"Found directory {config_dir} with file {existing_config[0].name}. But function was called with the serializer for '{serializer.SUFFIX}' files, not '{existing_format}'."
+                )
+            else:
+                # Should probably warn the user somehow about this, although it is not dangerous
+                logger.info(
+                    f"Removing {config_dir} as worker died during config sampling."
+                )
+                try:
+                    shutil.rmtree(str(config_dir))
+                except Exception as e:  # The worker doesn't need to crash for this
+                    logger.error(f"Can't delete {config_dir}: {e}")
     return previous_paths, pending_paths
 
 
@@ -89,13 +99,18 @@ def read(optimization_dir: Path | str, serializer: str | Any = None, logger=None
     optimization_dir = Path(optimization_dir)
     if serializer is None:
         for name, serializer_cls in SerializerMapping.items():
-            state_path = optimization_dir / f".optimizer_state{serializer_cls.SUFFIX}"
-            if state_path.exists():
+            data_files = [
+                f".optimizer_state{serializer_cls.SUFFIX}",
+                f"config{serializer_cls.SUFFIX}",
+                f"result{serializer_cls.SUFFIX}",
+            ]
+            if find_files(optimization_dir, data_files):
                 serializer = name
+                logging.info(f"Auto-detected {name} format for serializer")
                 break
         else:
             serializer = "json"
-        logging.info(f"Will use the {serializer} serializer")
+            logging.info(f"Will use the {serializer} serializer as a default")
 
     serializer = instance_from_map(SerializerMapping, serializer, "serializer")
     if logger is None:

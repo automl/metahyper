@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import glob
 import inspect
 import json
 from abc import abstractmethod
@@ -9,6 +10,24 @@ from typing import Any, Callable
 
 import dill
 import yaml
+
+
+def find_files(
+    directory: Path, files: list[str], any_suffix=False, check_nonempty=False
+) -> list[Path]:
+    found_paths = []
+    for file_name in files:
+        pattern = f"{directory.absolute()}/**/{file_name}"
+        if any_suffix:
+            pattern += "*"
+        for f_path in glob.glob(pattern, recursive=True):
+            path_found = Path(f_path)
+            if path_found.is_file():
+                if check_nonempty and path_found.stat().st_size == 0:
+                    continue
+                found_paths.append(path_found)
+    return found_paths
+
 
 # Serializers
 
