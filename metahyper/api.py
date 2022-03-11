@@ -224,6 +224,7 @@ def _sample_config(optimization_dir, sampler, serializer, logger):
         serializer.dump(optimizer_state, optimizer_state_file)
 
     # We want this to be the last action in sampling to catch potential crashes
+    config_working_directory.mkdir(exist_ok=True, parents=True)
     serializer.dump(config, config_working_directory / f"config{serializer.SUFFIX}")
 
     logger.debug(f"Sampled config {config_id}")
