@@ -59,6 +59,12 @@ def _load_sampled_paths(optimization_dir: Path | str, serializer, logger):
     base_result_directory = optimization_dir / "results"
     logger.debug(f"Loading results from {base_result_directory}")
 
+    decision_lock_file = optimization_dir / ".decision_lock"
+    decision_lock_file.touch(exist_ok=True)
+    decision_locker = Locker(decision_lock_file, logger.getChild("_locker"))
+    while not decision_locker.acquire_lock():
+        time.sleep(2)
+
     previous_paths, pending_paths = {}, {}
     for config_dir in base_result_directory.iterdir():
         if not config_dir.is_dir():
@@ -83,14 +89,17 @@ def _load_sampled_paths(optimization_dir: Path | str, serializer, logger):
                     f"'{serializer.SUFFIX}' files, not '{existing_format}'."
                 )
             else:
-                # Should probably warn the user somehow about this, although it is not dangerous
-                logger.info(
+                # Should probably warn the user somehow about this, although it is not
+                # dangerous
+                logger.warning(
                     f"Removing {config_dir} as worker died during config sampling."
                 )
                 try:
                     shutil.rmtree(str(config_dir))
-                except Exception as e:  # The worker doesn't need to crash for this
-                    logger.error(f"Can't delete {config_dir}: {e}")
+                except Exception:  # The worker doesn't need to crash for this
+                    logger.exception(f"Can't delete {config_dir}")
+
+    decision_locker.release_lock()
     return previous_paths, pending_paths
 
 
@@ -109,11 +118,11 @@ def read(optimization_dir: Path | str, serializer: str | Any = None, logger=None
             ]
             if find_files(optimization_dir, data_files):
                 serializer = name
-                logger.info(f"Auto-detected {name} format for serializer")
+                logger.debug(f"Auto-detected {name} format for serializer")
                 break
         else:
             serializer = "json"
-            logger.info(f"Will use the {serializer} serializer as a default")
+            logger.debug(f"Will use the {serializer} serializer as a default")
 
     serializer = instance_from_map(SerializerMapping, serializer, "serializer")
     previous_paths, pending_paths = _load_sampled_paths(
