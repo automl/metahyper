@@ -165,17 +165,14 @@ def _check_max_evaluations(
 ):
     logger.debug("Checking if max evaluations is reached")
 
-    previous_paths, pending_paths = _load_sampled_paths(
+    previous_results, pending_configs, pending_configs_free = read(
         optimization_dir, serializer, logger
     )
-    evaluation_count = len(previous_paths)
+    evaluation_count = len(previous_results)
 
     # Taking into account pending evaluations
     if not continue_until_max_evaluation_completed:
-        evaluation_count += len(pending_paths)
-
-    if evaluation_count >= max_evaluations:
-        logger.debug("Max evaluations is reached")
+        evaluation_count += len(pending_configs) - len(pending_configs_free)
 
     return evaluation_count >= max_evaluations
 
