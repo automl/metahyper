@@ -59,12 +59,6 @@ def _load_sampled_paths(optimization_dir: Path | str, serializer, logger):
     base_result_directory = optimization_dir / "results"
     logger.debug(f"Loading results from {base_result_directory}")
 
-    decision_lock_file = optimization_dir / ".decision_lock"
-    decision_lock_file.touch(exist_ok=True)
-    decision_locker = Locker(decision_lock_file, logger.getChild("_locker"))
-    while not decision_locker.acquire_lock():
-        time.sleep(2)
-
     previous_paths, pending_paths = {}, {}
     for config_dir in base_result_directory.iterdir():
         if not config_dir.is_dir():
@@ -99,16 +93,22 @@ def _load_sampled_paths(optimization_dir: Path | str, serializer, logger):
                 except Exception:  # The worker doesn't need to crash for this
                     logger.exception(f"Can't delete {config_dir}")
 
-    decision_locker.release_lock()
     return previous_paths, pending_paths
 
 
 def read(optimization_dir: Path | str, serializer: str | Any = None, logger=None):
+    optimization_dir = Path(optimization_dir)
+
     if logger is None:
         logger = logging.getLogger("metahyper")
 
+    decision_lock_file = optimization_dir / ".decision_lock"
+    decision_lock_file.touch(exist_ok=True)
+    decision_locker = Locker(decision_lock_file, logger.getChild("_locker"))
+    while not decision_locker.acquire_lock():
+        time.sleep(2)
+
     # Try to guess the serialization method used
-    optimization_dir = Path(optimization_dir)
     if serializer is None:
         for name, serializer_cls in SerializerMapping.items():
             data_files = [
@@ -153,6 +153,8 @@ def read(optimization_dir: Path | str, serializer: str | Any = None, logger=None
         f"pending_configs={pending_configs}, "
         f"and pending_configs_free={pending_configs_free}, "
     )
+
+    decision_locker.release_lock()
     return previous_results, pending_configs, pending_configs_free
 
 
