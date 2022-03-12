@@ -373,4 +373,4 @@ def run(
                 config_locker.release_lock()
                 evaluations_in_this_run += 1
         else:
-            time.sleep(5)
+            time.sleep(3)
