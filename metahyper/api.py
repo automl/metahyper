@@ -29,7 +29,7 @@ class Sampler(ABC):
         """Return a state for the sampler that will be used in every other thread"""
         return
 
-    def load_state(self, state: Any):  # pylint: disable
+    def load_state(self, state: Any):
         """Load a state for the sampler shared accross threads"""
 
     def load_results(
@@ -78,7 +78,9 @@ def _load_sampled_paths(optimization_dir: Path | str, serializer, logger):
             if existing_config:
                 existing_format = existing_config[0].suffix
                 logger.warning(
-                    f"Found directory {config_dir} with file {existing_config[0].name}. But function was called with the serializer for '{serializer.SUFFIX}' files, not '{existing_format}'."
+                    f"Found directory {config_dir} with file {existing_config[0].name}. "
+                    f"But function was called with the serializer for "
+                    f"'{serializer.SUFFIX}' files, not '{existing_format}'."
                 )
             else:
                 # Should probably warn the user somehow about this, although it is not dangerous
@@ -93,7 +95,8 @@ def _load_sampled_paths(optimization_dir: Path | str, serializer, logger):
 
 
 def read(optimization_dir: Path | str, serializer: str | Any = None, logger=None):
-    optimization_dir = Path(optimization_dir)
+    if logger is None:
+        logger = logging.getLogger("metahyper")
 
     # Try to guess the serialization method used
     optimization_dir = Path(optimization_dir)
@@ -106,16 +109,13 @@ def read(optimization_dir: Path | str, serializer: str | Any = None, logger=None
             ]
             if find_files(optimization_dir, data_files):
                 serializer = name
-                logging.info(f"Auto-detected {name} format for serializer")
+                logger.info(f"Auto-detected {name} format for serializer")
                 break
         else:
             serializer = "json"
-            logging.info(f"Will use the {serializer} serializer as a default")
+            logger.info(f"Will use the {serializer} serializer as a default")
 
     serializer = instance_from_map(SerializerMapping, serializer, "serializer")
-    if logger is None:
-        logger = logging.getLogger("metahyper")
-
     previous_paths, pending_paths = _load_sampled_paths(
         optimization_dir, serializer, logger
     )
