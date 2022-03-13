@@ -49,7 +49,7 @@ class Sampler(ABC):
         """
         raise NotImplementedError
 
-    def load_config(self, config: Any):  # pylint: disable=no-self-use
+    def load_config(self, config: Any):
         """Transform a serialized object into a configuration object"""
         return config
 
@@ -96,17 +96,20 @@ def _load_sampled_paths(optimization_dir: Path | str, serializer, logger):
     return previous_paths, pending_paths
 
 
-def read(optimization_dir: Path | str, serializer: str | Any = None, logger=None):
+def read(
+    optimization_dir: Path | str, serializer: str | Any = None, logger=None, do_lock=True
+):
     optimization_dir = Path(optimization_dir)
 
     if logger is None:
         logger = logging.getLogger("metahyper")
 
-    decision_lock_file = optimization_dir / ".decision_lock"
-    decision_lock_file.touch(exist_ok=True)
-    decision_locker = Locker(decision_lock_file, logger.getChild("_locker"))
-    while not decision_locker.acquire_lock():
-        time.sleep(2)
+    if do_lock:
+        decision_lock_file = optimization_dir / ".decision_lock"
+        decision_lock_file.touch(exist_ok=True)
+        decision_locker = Locker(decision_lock_file, logger.getChild("_locker"))
+        while not decision_locker.acquire_lock():
+            time.sleep(2)
 
     # Try to guess the serialization method used
     if serializer is None:
@@ -154,7 +157,8 @@ def read(optimization_dir: Path | str, serializer: str | Any = None, logger=None
         f"and pending_configs_free={pending_configs_free}, "
     )
 
-    decision_locker.release_lock()
+    if do_lock:
+        decision_locker.release_lock()
     return previous_results, pending_configs, pending_configs_free
 
 
@@ -182,7 +186,7 @@ def _check_max_evaluations(
 def _sample_config(optimization_dir, sampler, serializer, logger):
     # First load the results and state of the optimizer
     previous_results, pending_configs, pending_configs_free = read(
-        optimization_dir, serializer, logger
+        optimization_dir, serializer, logger, do_lock=False
     )
     optimizer_state_file = optimization_dir / f".optimizer_state{serializer.SUFFIX}"
     if optimizer_state_file.exists():
