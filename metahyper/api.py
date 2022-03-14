@@ -6,6 +6,7 @@ import shutil
 import time
 import warnings
 from abc import ABC, abstractmethod
+from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -252,6 +253,7 @@ def _evaluate_config(
     post_evaluation_hook,
 ):
     # First, the actual evaluation along with error handling and support of multiple APIs
+    config = deepcopy(config)
     config_id = working_directory.name[len("config_") :]
     logger.info(f"Start evaluating config {config_id}")
     try:
