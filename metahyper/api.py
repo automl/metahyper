@@ -214,8 +214,8 @@ def _sample_config(optimization_dir, sampler, serializer, logger):
         config_working_directory = base_result_directory / f"config_{config_id}"
         config_working_directory.mkdir(exist_ok=True)
 
-        Path(config_working_directory, "time_sampled.txt").write_text(
-            str(time.time()), encoding="utf-8"
+        serializer.dump(
+            {"time_sampled": time.time()}, config_working_directory / "metadata"
         )
         if previous_config_id is not None:
             previous_config_id_file = config_working_directory / "previous_config.id"
@@ -237,7 +237,7 @@ def _sample_config(optimization_dir, sampler, serializer, logger):
         serializer.dump(optimizer_state, optimizer_state_file)
 
     # We want this to be the last action in sampling to catch potential crashes
-    serializer.dump(config, config_working_directory / f"config{serializer.SUFFIX}")
+    serializer.dump(config, config_working_directory / "config")
 
     logger.debug(f"Sampled config {config_id}")
     return config, config_working_directory, previous_working_directory
@@ -295,9 +295,12 @@ def _evaluate_config(
     # Finally, we now dump all information to disk:
     # 1. When was the evaluation completed
     Path(working_directory, "time_end.txt").write_text(str(time.time()), encoding="utf-8")
+    config_metadata = serializer.load(working_directory / "metadata")
+    config_metadata["time_sampled"] = time.time()
+    serializer.dump(config_metadata, working_directory / "metadata")
 
     # 2. The result returned by the evaluation_fn
-    serializer.dump(result, working_directory / f"result{serializer.SUFFIX}")
+    serializer.dump(result, working_directory / "result")
 
     # 3. Anything the user might want to serialize (or do otherwise)
     if post_evaluation_hook is not None:

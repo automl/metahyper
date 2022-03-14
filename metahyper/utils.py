@@ -34,63 +34,73 @@ def find_files(
 
 class DataSerializer:
     SUFFIX = ""
+    PRE_SERIALIZE = True
 
     def __init__(self, config_loader: Callable | None = None):
         self.config_loader = config_loader or (lambda x: x)
 
     @abstractmethod
-    def load(self, path: Path | str):
+    def _load_from(self, path: str):
         raise NotImplementedError
-
-    def load_config(self, path: Path | str):
-        return self.config_loader(self.load(path))
 
     @abstractmethod
-    def dump(self, data: Any, path: Path | str):
+    def _dump_to(self, data: Any, path: str):
         raise NotImplementedError
+
+    def load(self, path: Path | str, add_suffix=True):
+        path = str(path)
+        if add_suffix and Path(path).suffix != self.SUFFIX:
+            path = path + self.SUFFIX
+        return self._load_from(path)
+
+    def dump(self, data: Any, path: Path | str, add_suffix=True):
+        if self.PRE_SERIALIZE and hasattr(data, "serialize"):
+            data = data.serialize()
+        path = str(path)
+        if add_suffix and Path(path).suffix != self.SUFFIX:
+            path = path + self.SUFFIX
+        self._dump_to(data, path)
+
+    def load_config(self, path: Path | str):
+        if self.PRE_SERIALIZE:
+            return self.config_loader(self.load(path))
+        return self.load(path)
 
 
 class DillSerializer(DataSerializer):
     SUFFIX = ".dill"
+    PRE_SERIALIZE = False
 
-    def load(self, path: Path | str):
-        with open(str(path), "rb") as file_stream:
+    def _load_from(self, path: str):
+        with open(path, "rb") as file_stream:
             return dill.load(file_stream)
 
-    def load_config(self, path: Path | str):
-        # The object is already built
-        return self.load(path)
-
-    def dump(self, data: Any, path: Path | str):
-        with open(str(path), "wb") as file_stream:
+    def _dump_to(self, data: Any, path: str):
+        with open(path, "wb") as file_stream:
             return dill.dump(data, file_stream)
 
 
 class JsonSerializer(DataSerializer):
     SUFFIX = ".json"
 
-    def load(self, path: Path | str):
-        with open(str(path)) as file_stream:
+    def _load_from(self, path: str):
+        with open(path) as file_stream:
             return json.load(file_stream)
 
-    def dump(self, data: Any, path: Path | str):
-        if hasattr(data, "serialize"):
-            data = data.serialize()
-        with open(str(path), "w") as file_stream:
+    def _dump_to(self, data: Any, path: str):
+        with open(path, "w") as file_stream:
             return json.dump(data, file_stream)
 
 
 class YamlSerializer(DataSerializer):
     SUFFIX = ".yaml"
 
-    def load(self, path: Path | str):
-        with open(str(path)) as file_stream:
+    def _load_from(self, path: str):
+        with open(path) as file_stream:
             return yaml.full_load(file_stream)
 
-    def dump(self, data: Any, path: Path | str):
-        if hasattr(data, "serialize"):
-            data = data.serialize()
-        with open(str(path), "w") as file_stream:
+    def _dump_to(self, data: Any, path: str):
+        with open(path, "w") as file_stream:
             return yaml.dump(data, file_stream)
 
 
