@@ -9,6 +9,8 @@ from pathlib import Path
 from typing import Any, Callable
 
 import dill
+import numpy
+import torch
 import yaml
 
 
@@ -30,6 +32,19 @@ def find_files(
 
 
 # Serializers
+
+
+def get_data_representation(data: Any):
+    if isinstance(data, dict):
+        return {key: get_data_representation(val) for key, val in data.items()}
+    elif isinstance(data, list) or isinstance(data, tuple):
+        return [get_data_representation(val) for val in data]
+    elif type(data).__module__ == numpy.__name__ or isinstance(data, torch.Tensor):
+        return data.tolist()
+    elif hasattr(data, "serialize"):
+        return data.serialize()
+    else:
+        return data
 
 
 class DataSerializer:
@@ -54,8 +69,8 @@ class DataSerializer:
         return self._load_from(path)
 
     def dump(self, data: Any, path: Path | str, add_suffix=True):
-        if self.PRE_SERIALIZE and hasattr(data, "serialize"):
-            data = data.serialize()
+        if self.PRE_SERIALIZE:
+            data = get_data_representation(data)
         path = str(path)
         if add_suffix and Path(path).suffix != self.SUFFIX:
             path = path + self.SUFFIX
