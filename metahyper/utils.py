@@ -9,9 +9,13 @@ from pathlib import Path
 from typing import Any, Callable
 
 import dill
-import numpy
+import numpy as np
 import torch
 import yaml
+
+
+def non_empty_file(file_path: Path) -> bool:
+    return file_path.exists() and file_path.stat().st_size != 0
 
 
 def find_files(
@@ -25,7 +29,8 @@ def find_files(
         for f_path in glob.glob(pattern, recursive=True):
             path_found = Path(f_path)
             if path_found.is_file():
-                if check_nonempty and path_found.stat().st_size == 0:
+                print(path_found, path_found.stat().st_size)
+                if check_nonempty and not non_empty_file(path_found):
                     continue
                 found_paths.append(path_found)
     return found_paths
@@ -35,14 +40,19 @@ def find_files(
 
 
 def get_data_representation(data: Any):
+    """Common data representations. Other specific types should be handled
+    by the user in his Parameter class."""
     if isinstance(data, dict):
         return {key: get_data_representation(val) for key, val in data.items()}
     elif isinstance(data, list) or isinstance(data, tuple):
         return [get_data_representation(val) for val in data]
-    elif type(data).__module__ == numpy.__name__ or isinstance(data, torch.Tensor):
-        return data.tolist()
+    elif type(data).__module__ == np.__name__ or isinstance(data, torch.Tensor):
+        data = data.tolist()
+        if type(data).__module__ == np.__name__:
+            data = data.item()
+        return get_data_representation(data)
     elif hasattr(data, "serialize"):
-        return data.serialize()
+        return get_data_representation(data.serialize())
     else:
         return data
 
@@ -116,7 +126,12 @@ class YamlSerializer(DataSerializer):
 
     def _dump_to(self, data: Any, path: str):
         with open(path, "w") as file_stream:
-            return yaml.dump(data, file_stream)
+            try:
+                return yaml.safe_dump(data, file_stream)
+            except yaml.representer.RepresenterError as e:
+                raise TypeError(
+                    f"You should return objects that are JSON-serializable. The object {e.args[1]} of type {type(e.args[1])} is not."
+                ) from e
 
 
 SerializerMapping = {

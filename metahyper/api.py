@@ -14,7 +14,7 @@ from typing import Any
 import more_itertools
 
 from ._locker import Locker
-from .utils import SerializerMapping, find_files, instance_from_map
+from .utils import SerializerMapping, find_files, instance_from_map, non_empty_file
 
 
 @dataclass
@@ -68,9 +68,9 @@ def _load_sampled_paths(optimization_dir: Path | str, serializer, logger):
         config_file = config_dir / f"config{serializer.SUFFIX}"
         result_file = config_dir / f"result{serializer.SUFFIX}"
 
-        if result_file.exists():
+        if non_empty_file(result_file):
             previous_paths[config_id] = (config_dir, config_file, result_file)
-        elif config_file.exists():
+        elif non_empty_file(result_file):
             pending_paths[config_id] = (config_dir, config_file)
         else:
             existing_config = find_files(
