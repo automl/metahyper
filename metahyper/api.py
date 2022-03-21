@@ -70,7 +70,7 @@ def _load_sampled_paths(optimization_dir: Path | str, serializer, logger):
 
         if non_empty_file(result_file):
             previous_paths[config_id] = (config_dir, config_file, result_file)
-        elif non_empty_file(result_file):
+        elif non_empty_file(config_file):
             pending_paths[config_id] = (config_dir, config_file)
         else:
             existing_config = find_files(
