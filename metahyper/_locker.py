@@ -1,5 +1,7 @@
 import atexit
 import fcntl
+import time
+from contextlib import contextmanager
 
 
 class Locker:
@@ -24,3 +26,10 @@ class Locker:
         except BlockingIOError:
             self.logger.debug(f"Failed to acquire lock for {self.lock_path}")
             return False
+
+    @contextmanager
+    def acquire_force(self, time_step=1):
+        while not self.acquire_force():
+            time.sleep(time_step)
+        yield True
+        self.release_lock()
