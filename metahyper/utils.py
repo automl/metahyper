@@ -29,7 +29,6 @@ def find_files(
         for f_path in glob.glob(pattern, recursive=True):
             path_found = Path(f_path)
             if path_found.is_file():
-                print(path_found, path_found.stat().st_size)
                 if check_nonempty and not non_empty_file(path_found):
                     continue
                 found_paths.append(path_found)
