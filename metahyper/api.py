@@ -293,8 +293,23 @@ def _evaluate_config(
                 "config with '**config'.",
                 FutureWarning,
             )
-        if not isinstance(result, dict):
-            raise ValueError("The evaluation result should be a dictionnary")
+
+        # Ensuring the result have the correct format that can be exploited by other functions
+        if isinstance(result, dict):
+            try:
+                result["loss"] = float(result["loss"])
+            except KeyError as e:
+                raise ValueError("The loss should value should be provided") from e
+            except (TypeError, ValueError) as e:
+                raise ValueError("The loss should be a float") from e
+        else:
+            try:
+                result = float(result)
+            except (TypeError, ValueError) as e:
+                raise ValueError(
+                    "The evaluation result should be a dictionnary or a float"
+                ) from e
+            result = {"loss": result}
     except Exception:
         logger.exception(
             f"An error occured during evaluation of config {config_id}: " f"{config}."
