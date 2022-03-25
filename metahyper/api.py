@@ -4,7 +4,6 @@ import inspect
 import logging
 import shutil
 import time
-import warnings
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from copy import deepcopy
@@ -260,12 +259,11 @@ def _evaluate_config(
     previous_working_directory,
     logger,
 ):
-    # First, the actual evaluation along with error handling and support of multiple APIs
     config = deepcopy(config)
     logger.info(f"Start evaluating config {config_id}")
     try:
-        # API support: If working_directory and previous_working_directory are included
-        # in the signature we supply their values, otherwise we simply do nothing.
+        # If working_directory and previous_working_directory are included in the
+        # signature we supply their values, otherwise we simply do nothing.
         evaluation_fn_params = inspect.signature(evaluation_fn).parameters
         directory_params = []
         if "working_directory" in evaluation_fn_params:
@@ -273,26 +271,10 @@ def _evaluate_config(
         if "previous_working_directory" in evaluation_fn_params:
             directory_params.append(previous_working_directory)
 
-        # API support: Allow config to be used as:
-        try:
-            # 1. Individual keyword arguments
-            # 2. Allowed to be captured as **configs
-            result = evaluation_fn(
-                *directory_params,
-                **config,
-            )
-        except TypeError:  # TODO : remove this part (deprecated part)
-            # 3. As a mere single keyword argument
-            result = evaluation_fn(
-                *directory_params,
-                config=config,
-            )
-            warnings.warn(
-                "Using the config argument for the evaluation function will"
-                "soon be removed. Please use keyword arguments, or catch the"
-                "config with '**config'.",
-                FutureWarning,
-            )
+        result = evaluation_fn(
+            *directory_params,
+            **config,
+        )
 
         # Ensuring the result have the correct format that can be exploited by other functions
         if isinstance(result, dict):
