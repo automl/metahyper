@@ -6,6 +6,7 @@ import metahyper
 
 class MinimalSampler(metahyper.Sampler):
     def __init__(self):
+        super().__init__()
         self.results = dict()
 
     def load_results(self, results, pending_configs):

@@ -26,7 +26,7 @@ class ConfigResult:
 
 class Sampler(ABC):
     # pylint: disable=no-self-use,unused-argument
-    def __init__(self, budget: int | float | None):
+    def __init__(self, budget: int | float | None = None):
         self.used_budget: int | float = 0
         self.budget = budget
 

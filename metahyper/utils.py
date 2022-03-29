@@ -9,8 +9,6 @@ from pathlib import Path
 from typing import Any, Callable
 
 import dill
-import numpy as np
-import torch
 import yaml
 
 
@@ -45,9 +43,9 @@ def get_data_representation(data: Any):
         return {key: get_data_representation(val) for key, val in data.items()}
     elif isinstance(data, list) or isinstance(data, tuple):
         return [get_data_representation(val) for val in data]
-    elif type(data).__module__ == np.__name__ or isinstance(data, torch.Tensor):
+    elif type(data).__module__ in ["numpy", "torch"]:
         data = data.tolist()
-        if type(data).__module__ == np.__name__:
+        if type(data).__module__ == "numpy":
             data = data.item()
         return get_data_representation(data)
     elif hasattr(data, "serialize"):
