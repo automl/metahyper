@@ -215,6 +215,7 @@ def _sample_config(optimization_dir, sampler, serializer, logger):
     base_result_directory = optimization_dir / "results"
     if pending_configs_free:
         logger.debug("Sampling a pending config without a worker")
+        is_continuation_of_crashed_config = True
         config_id, config = more_itertools.first(pending_configs_free.items())
         config_working_directory = base_result_directory / f"config_{config_id}"
         previous_config_id_file = config_working_directory / "previous_config.id"
@@ -224,6 +225,7 @@ def _sample_config(optimization_dir, sampler, serializer, logger):
             previous_config_id = None
     else:
         logger.debug("Sampling a new configuration")
+        is_continuation_of_crashed_config = False
         sampler.load_results(previous_results, pending_configs)
         config, config_id, previous_config_id = sampler.get_config_and_ids()
 
@@ -248,7 +250,13 @@ def _sample_config(optimization_dir, sampler, serializer, logger):
     serializer.dump(config, config_working_directory / "config")
 
     logger.debug(f"Sampled config {config_id}")
-    return config_id, config, config_working_directory, previous_working_directory
+    return (
+        config_id,
+        config,
+        config_working_directory,
+        previous_working_directory,
+        is_continuation_of_crashed_config,
+    )
 
 
 def _evaluate_config(
@@ -314,6 +322,7 @@ def run(
     logger=None,
     post_evaluation_hook=None,
     overwrite_optimization_dir=False,
+    filesystem_grace_period_for_crashed_configs=45,
 ):
     serializer_cls = instance_from_map(
         SerializerMapping, serializer, "serializer", as_class=True
@@ -372,6 +381,7 @@ def run(
                         config,
                         working_directory,
                         previous_working_directory,
+                        is_continuation_of_crashed_config,
                     ) = _sample_config(optimization_dir, sampler, serializer, logger)
 
                 config_lock_file = working_directory / ".config_lock"
@@ -380,6 +390,20 @@ def run(
                 config_lock_acquired = config_locker.acquire_lock()
             finally:
                 decision_locker.release_lock()
+
+            if is_continuation_of_crashed_config:
+                # This is to catch the case of the shared filesystem being out of sync,
+                # so the lock is not there anymore, but the result is not yet seen by one
+                # of the workers. Wait for a grace period and then check if the config
+                # really crashed.
+                logger.info(
+                    f"Checking if config {config_id} crashed and needs to be continued."
+                )
+                time.sleep(filesystem_grace_period_for_crashed_configs)
+                if non_empty_file(working_directory / f"result{serializer_cls.SUFFIX}"):
+                    logger.info(f"Config {config_id} did not crash.")
+                    continue
+                logger.info(f"Config {config_id} did crash, so continuing/restarting it")
 
             if config_lock_acquired:
                 try:
