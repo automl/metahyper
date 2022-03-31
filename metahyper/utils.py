@@ -149,7 +149,7 @@ def is_partial_class(obj):
 
 def instance_from_map(
     mapping: dict[str, Any],
-    request: str | Any,
+    request: str | list | tuple | Any,
     name: str = "mapping",
     allow_any: bool = True,
     as_class: bool = False,
@@ -172,6 +172,20 @@ def instance_from_map(
             or invalid key.
     """
 
+    # Split arguments of the form (request, kwargs)
+    args_dict = kwargs or {}
+    if isinstance(request, tuple) or isinstance(request, list):
+        if len(request) != 2:
+            raise ValueError(
+                "When building an instance and specifying arguments, "
+                "you should give a pair (class, arguments)"
+            )
+        request, req_args_dict = request
+        if not isinstance(req_args_dict, dict):
+            raise ValueError("The arguments should be given as a dictionary")
+        args_dict = {**args_dict, **req_args_dict}
+
+    # Then, get the class/instance from the request
     if isinstance(request, str):
         if request in mapping:
             instance = mapping[request]
@@ -182,14 +196,22 @@ def instance_from_map(
     else:
         raise ValueError(f"Object {request} invalid key for {name}")
 
+    # Check if the request is a class if it is mandatory
+    if (args_dict or as_class) and not is_partial_class(instance):
+        raise ValueError(
+            f"{instance} is not a class and can't be used with additional arguments"
+        )
+
+    # Give the arguments to the class
+    if args_dict:
+        instance = partial(instance, **args_dict)
+
+    # Return the class / instance
     if as_class:
-        if not is_partial_class(instance):
-            raise ValueError(f"{instance} is not a class")
         return instance
     if is_partial_class(instance):
-        kwargs = kwargs or {}
         try:
-            instance = instance(**kwargs)
+            instance = instance()
         except TypeError as e:
-            raise TypeError(f"{e} when calling {instance} with {kwargs}") from e
+            raise TypeError(f"{e} when calling {instance} with {args_dict}") from e
     return instance
