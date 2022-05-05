@@ -20,8 +20,8 @@ class Locker:
 
     def acquire_lock(self):
         try:
-            self.logger.debug(f"Acquired lock for {self.lock_path}")
             fcntl.lockf(self.lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            self.logger.debug(f"Acquired lock for {self.lock_path}")
             return True
         except BlockingIOError:
             self.logger.debug(f"Failed to acquire lock for {self.lock_path}")
@@ -29,7 +29,7 @@ class Locker:
 
     @contextmanager
     def acquire_force(self, time_step=1):
-        while not self.acquire_force():
+        while not self.acquire_lock():
             time.sleep(time_step)
         yield True
         self.release_lock()
