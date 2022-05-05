@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "metahyper"
-version = "0.5.2"
+version = "0.5.3"
 description = "Parallelisation and distribution framework for neural pipeline search algorithms."
 authors = ["Danny Stoll <stolld@cs.uni-freiburg.de>", "Théophane Vallaeys <theophane.vallaeys@ens.psl.eu>"]
 readme = "README.md"
