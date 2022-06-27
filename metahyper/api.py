@@ -73,6 +73,15 @@ class Sampler(ABC):
         return config
 
 
+class Configuration:
+    """If the configuration is not a simple dictionary, it should inherit from
+    this object and define the 'hp_values' method"""
+
+    def hp_values(self):
+        """Should return a dictionary of the hyperparameter values"""
+        raise NotImplementedError
+
+
 def _load_sampled_paths(optimization_dir: Path | str, serializer, logger):
     optimization_dir = Path(optimization_dir)
     base_result_directory = optimization_dir / "results"
@@ -267,6 +276,8 @@ def _evaluate_config(
     previous_working_directory,
     logger,
 ):
+    if isinstance(config, Configuration):
+        config = config.hp_values()
     config = deepcopy(config)
     logger.info(f"Start evaluating config {config_id}")
     try:
