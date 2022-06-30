@@ -435,14 +435,19 @@ def run(
                         # Updating the global budget
                         if "cost" in result:
                             eval_cost = float(result["cost"])
-                            with decision_locker.acquire_force(time_step=1):
-                                with sampler.using_state(sampler_state_file, serializer):
-                                    sampler.used_budget += eval_cost
+                            account_for_cost = result.get("account_for_cost", True)
+                            if account_for_cost:
+                                with decision_locker.acquire_force(time_step=1):
+                                    with sampler.using_state(
+                                        sampler_state_file, serializer
+                                    ):
+                                        sampler.used_budget += eval_cost
 
                             metadata["budget"] = {
                                 "max": sampler.budget,
                                 "used": sampler.used_budget,
                                 "eval_cost": eval_cost,
+                                "account_for_cost": account_for_cost,
                             }
                         elif sampler.budget is not None:
                             raise ValueError(
