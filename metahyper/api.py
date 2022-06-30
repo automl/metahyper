@@ -14,7 +14,13 @@ from typing import Any
 import more_itertools
 
 from ._locker import Locker
-from .utils import SerializerMapping, find_files, instance_from_map, non_empty_file
+from .utils import (
+    SerializerMapping,
+    find_files,
+    init_serializer,
+    instance_from_map,
+    non_empty_file,
+)
 
 
 @dataclass
@@ -124,6 +130,16 @@ def _load_sampled_paths(optimization_dir: Path | str, serializer, logger):
     return previous_paths, pending_paths
 
 
+def read_config_result(result_dir: Path | str, serializer: str | Any = None, logger=None):
+    result_dir = Path(result_dir)
+    serializer = init_serializer(serializer, result_dir, logger)
+
+    config = serializer.load_config(result_dir / "config")
+    result = serializer.load(result_dir / "result")
+    metadata = serializer.load(result_dir / "metadata")
+    return ConfigResult(config, result, metadata)
+
+
 def read(
     optimization_dir: Path | str, serializer: str | Any = None, logger=None, do_lock=True
 ):
@@ -140,20 +156,7 @@ def read(
             time.sleep(2)
 
     # Try to guess the serialization method used
-    if serializer is None:
-        for name, serializer_cls in SerializerMapping.items():
-            data_files = [
-                f".optimizer_state{serializer_cls.SUFFIX}",
-                f"config{serializer_cls.SUFFIX}",
-                f"result{serializer_cls.SUFFIX}",
-            ]
-            if find_files(optimization_dir, data_files):
-                serializer = name
-                logger.debug(f"Auto-detected {name} format for serializer")
-                break
-        else:
-            serializer = "json"
-            logger.debug(f"Will use the {serializer} serializer as a default")
+    serializer = init_serializer(serializer, optimization_dir, logger)
 
     serializer = instance_from_map(SerializerMapping, serializer, "serializer")
     previous_paths, pending_paths = _load_sampled_paths(
@@ -161,11 +164,8 @@ def read(
     )
     previous_results, pending_configs, pending_configs_free = {}, {}, {}
 
-    for config_id, (config_dir, config_file, result_file) in previous_paths.items():
-        config = serializer.load_config(config_file)
-        result = serializer.load(result_file)
-        metadata = serializer.load(result_file.parent / "metadata")
-        previous_results[config_id] = ConfigResult(config, result, metadata)
+    for config_id, (config_dir, _, _) in previous_paths.items():
+        previous_results[config_id] = read_config_result(config_dir, serializer, logger)
 
     for config_id, (config_dir, config_file) in pending_paths.items():
         pending_configs[config_id] = serializer.load_config(config_file)

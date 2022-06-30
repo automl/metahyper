@@ -3,6 +3,7 @@ from __future__ import annotations
 import glob
 import inspect
 import json
+import logging
 from abc import abstractmethod
 from functools import partial
 from pathlib import Path
@@ -34,6 +35,28 @@ def find_files(
 
 
 # Serializers
+
+
+def init_serializer(serializer=None, read_files_in=None, logger=None):
+    if logger is None:
+        logger = logging.getLogger("metahyper")
+    if serializer is None:
+        if read_files_in is not None:
+            for name, serializer_cls in SerializerMapping.items():
+                data_files = [
+                    f".optimizer_state{serializer_cls.SUFFIX}",
+                    f"config{serializer_cls.SUFFIX}",
+                    f"result{serializer_cls.SUFFIX}",
+                ]
+                if find_files(read_files_in, data_files):
+                    serializer = name
+                    logger.debug(f"Auto-detected {name} format for serializer")
+                    break
+        if serializer is None:
+            serializer = "json"
+            logger.debug(f"Will use the {serializer} serializer as a default")
+
+    return instance_from_map(SerializerMapping, serializer, "serializer")
 
 
 def get_data_representation(data: Any):
