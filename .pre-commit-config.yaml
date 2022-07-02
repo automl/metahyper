@@ -10,7 +10,7 @@ repos:
       - id: check-toml
 
   - repo: https://github.com/psf/black
-    rev: 22.1.0
+    rev: 22.3.0
     hooks:
       - id: black
 
@@ -46,6 +46,8 @@ repos:
     rev: v0.930
     hooks:
       - id: mypy
+        additional_dependencies:
+          - types-PyYAML
 
   - repo: https://github.com/PyCQA/pylint
     rev: v2.12.2

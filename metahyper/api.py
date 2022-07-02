@@ -4,6 +4,7 @@ import inspect
 import logging
 import shutil
 import time
+import warnings
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from copy import deepcopy
@@ -21,6 +22,8 @@ from .utils import (
     instance_from_map,
     non_empty_file,
 )
+
+warnings.simplefilter("always", DeprecationWarning)
 
 
 @dataclass
@@ -271,9 +274,9 @@ def _sample_config(optimization_dir, sampler, serializer, logger):
 def _evaluate_config(
     config_id,
     config,
-    working_directory,
+    pipeline_directory,
     evaluation_fn,
-    previous_working_directory,
+    previous_pipeline_directory,
     logger,
 ):
     if isinstance(config, Configuration):
@@ -285,10 +288,31 @@ def _evaluate_config(
         # signature we supply their values, otherwise we simply do nothing.
         evaluation_fn_params = inspect.signature(evaluation_fn).parameters
         directory_params = []
-        if "working_directory" in evaluation_fn_params:
-            directory_params.append(working_directory)
-        if "previous_working_directory" in evaluation_fn_params:
-            directory_params.append(previous_working_directory)
+        if "pipeline_directory" in evaluation_fn_params:
+            directory_params.append(pipeline_directory)
+        elif "working_directory" in evaluation_fn_params:
+            warnings.warn(
+                "the argument: 'working_directory' is deprecated. "
+                "In the function: '{}', please, "
+                "use 'pipeline_directory' instead. "
+                "version==0.5.5".format(evaluation_fn.__name__),
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            directory_params.append(pipeline_directory)
+
+        if "previous_pipeline_directory" in evaluation_fn_params:
+            directory_params.append(previous_pipeline_directory)
+        elif "previous_working_directory" in evaluation_fn_params:
+            warnings.warn(
+                "the argument: 'previous_working_directory' is deprecated. "
+                "In the function: '{}', please,  "
+                "use 'previous_pipeline_directory' instead. "
+                "version==0.5.5".format(evaluation_fn.__name__),
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            directory_params.append(previous_pipeline_directory)
 
         result = evaluation_fn(
             *directory_params,

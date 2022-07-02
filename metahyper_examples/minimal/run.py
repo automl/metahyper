@@ -19,7 +19,7 @@ class MinimalSampler(metahyper.Sampler):
         return config, config_id, previous_config_id
 
 
-def evaluation_fn(working_directory, **config):  # pylint: disable=unused-argument
+def evaluation_fn(pipeline_directory, **config):  # pylint: disable=unused-argument
     time.sleep(15)
     return 5
 
