@@ -229,8 +229,8 @@ def _sample_config(optimization_dir, sampler, serializer, logger):
         logger.debug("Sampling a pending config without a worker")
         is_continuation_of_crashed_config = True
         config_id, config = more_itertools.first(pending_configs_free.items())
-        config_working_directory = base_result_directory / f"config_{config_id}"
-        previous_config_id_file = config_working_directory / "previous_config.id"
+        pipeline_directory = base_result_directory / f"config_{config_id}"
+        previous_config_id_file = pipeline_directory / "previous_config.id"
         if previous_config_id_file.exists():
             previous_config_id = previous_config_id_file.read_text()
         else:
@@ -241,32 +241,30 @@ def _sample_config(optimization_dir, sampler, serializer, logger):
         sampler.load_results(previous_results, pending_configs)
         config, config_id, previous_config_id = sampler.get_config_and_ids()
 
-        config_working_directory = base_result_directory / f"config_{config_id}"
-        config_working_directory.mkdir(exist_ok=True)
+        pipeline_directory = base_result_directory / f"config_{config_id}"
+        pipeline_directory.mkdir(exist_ok=True)
 
-        serializer.dump(
-            {"time_sampled": time.time()}, config_working_directory / "metadata"
-        )
+        serializer.dump({"time_sampled": time.time()}, pipeline_directory / "metadata")
         if previous_config_id is not None:
-            previous_config_id_file = config_working_directory / "previous_config.id"
+            previous_config_id_file = pipeline_directory / "previous_config.id"
             previous_config_id_file.write_text(previous_config_id)
 
     if previous_config_id is not None:
-        previous_working_directory = Path(
+        previous_pipeline_directory = Path(
             base_result_directory, f"config_{previous_config_id}"
         )
     else:
-        previous_working_directory = None
+        previous_pipeline_directory = None
 
     # We want this to be the last action in sampling to catch potential crashes
-    serializer.dump(config, config_working_directory / "config")
+    serializer.dump(config, pipeline_directory / "config")
 
     logger.debug(f"Sampled config {config_id}")
     return (
         config_id,
         config,
-        config_working_directory,
-        previous_working_directory,
+        pipeline_directory,
+        previous_pipeline_directory,
         is_continuation_of_crashed_config,
     )
 
@@ -284,7 +282,7 @@ def _evaluate_config(
     config = deepcopy(config)
     logger.info(f"Start evaluating config {config_id}")
     try:
-        # If working_directory and previous_working_directory are included in the
+        # If pipeline_directory and previous_pipeline_directory are included in the
         # signature we supply their values, otherwise we simply do nothing.
         evaluation_fn_params = inspect.signature(evaluation_fn).parameters
         directory_params = []
@@ -414,12 +412,12 @@ def run(
                     (
                         config_id,
                         config,
-                        working_directory,
-                        previous_working_directory,
+                        pipeline_directory,
+                        previous_pipeline_directory,
                         is_continuation_of_crashed_config,
                     ) = _sample_config(optimization_dir, sampler, serializer, logger)
 
-                config_lock_file = working_directory / ".config_lock"
+                config_lock_file = pipeline_directory / ".config_lock"
                 config_lock_file.touch(exist_ok=True)
                 config_locker = Locker(config_lock_file, logger.getChild("_locker"))
                 config_lock_acquired = config_locker.acquire_lock()
@@ -435,7 +433,7 @@ def run(
                     f"Checking if config {config_id} crashed and needs to be continued."
                 )
                 time.sleep(filesystem_grace_period_for_crashed_configs)
-                if non_empty_file(working_directory / f"result{serializer_cls.SUFFIX}"):
+                if non_empty_file(pipeline_directory / f"result{serializer_cls.SUFFIX}"):
                     logger.info(f"Config {config_id} did not crash.")
                     continue
                 logger.info(f"Config {config_id} did crash, so continuing/restarting it")
@@ -446,14 +444,14 @@ def run(
                     result, metadata = _evaluate_config(
                         config_id,
                         config,
-                        working_directory,
+                        pipeline_directory,
                         evaluation_fn,
-                        previous_working_directory,
+                        previous_pipeline_directory,
                         logger,
                     )
 
                     # 2. Then, we now dump all information to disk:
-                    serializer.dump(result, working_directory / "result")
+                    serializer.dump(result, pipeline_directory / "result")
 
                     if result != "error":
                         # Updating the global budget
@@ -479,14 +477,14 @@ def run(
                                 "a 'cost' field when used with a budget"
                             )
 
-                    config_metadata = serializer.load(working_directory / "metadata")
+                    config_metadata = serializer.load(pipeline_directory / "metadata")
                     config_metadata.update(metadata)
-                    serializer.dump(config_metadata, working_directory / "metadata")
+                    serializer.dump(config_metadata, pipeline_directory / "metadata")
 
                     # 3. Anything the user might want to do after the evaluation
                     if post_evaluation_hook is not None:
                         post_evaluation_hook(
-                            config, config_id, working_directory, result, logger
+                            config, config_id, pipeline_directory, result, logger
                         )
                     else:
                         logger.info(f"Finished evaluating config {config_id}")
