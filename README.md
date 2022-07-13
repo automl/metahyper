@@ -25,4 +25,4 @@ Please see our examples in [metahyper_examples](metahyper_examples).
 
 ## Contributing
 
-Please see our guidelines and guides for contributors at [CONTRIBUTING.md](CONTRIBUTING.md).
+Please see our guidelines and guides for contributors at [CONTRIBUTING.md](docs/CONTRIBUTING.md).

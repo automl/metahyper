@@ -53,15 +53,13 @@ conda activate metahyper
 First, install poetry, e.g., via
 
 ```bash
-wget https://raw.githubusercontent.com/sdispater/poetry/master/get-poetry.py -O get-poetry.py
-python get-poetry.py
-rm get-poetry.py
+curl -sSL https://install.python-poetry.org | python3 -
 ```
 
 Then consider appending
 
 ```bash
-export PATH="$HOME/.poetry/bin:$PATH"
+export PATH="$HOME/.local/bin:$PATH"
 ```
 
 to your `.zshrc` / `.bashrc` or alternatively simply running the export manually.
@@ -72,12 +70,6 @@ Inside the main directory of metahyper run
 
 ```bash
 poetry install
-```
-
-To install specific versions of torch (e.g., cuda enabled versions) you might want to use our utility
-
-```bash
-python -m metahyper.utils.install_torch
 ```
 
 ### 4. Activate pre-commit for the repository
@@ -116,6 +108,20 @@ or also updating dependencies alongside via
 ```bash
 poetry update
 ```
+
+### Poetry: Publish on PyPI
+
+To publish to PyPI:
+
+1. Get publishing rights by asking Danny
+1. Think carefully about what you are doing, once on PyPI we can not change things.
+1. Run
+
+```bash
+poetry publish --build
+```
+
+This will ask for your PyPI credentials.
 
 ### Pre-commit: Do not run hooks
 
@@ -163,10 +169,19 @@ y = x + 1
 # fmt: on
 ```
 
-### MkDocs
+### Documentation (MkDocs)
 
-See [Material for MkDocs](https://squidfunk.github.io/mkdocs-material/setup/changing-the-colors/).
-Before running any commands, best `cd docs`.
+We use [MkDocs](https://www.mkdocs.org/getting-started/), more specifically [Material for MkDocs](https://squidfunk.github.io/mkdocs-material/) for documentation.
+Source files for the documentation are at [docs](docs) and configuration at  [mkdocs.yml](../mkdocs.yml).
+
+To build and view the documentation run
+
+```bash
+mkdocs build
+mkdocs serve
+```
+
+and open the URL shown by the `mkdocs serve` command.
 
 ### Editorconfig
 
